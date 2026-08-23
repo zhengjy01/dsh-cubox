@@ -144,8 +144,11 @@ console.log('\n[sync]')
 
   // Collection formatting + LLM brief (stubbed fetch).
   const { formatCollectionForPrompt, writeDailyBrief } = mod
-  const formatted = formatCollectionForPrompt(reloaded, new Date())
+  const formatted = formatCollectionForPrompt(reloaded, new Date(), 1)
   check('format collection', formatted.includes('AI 文章') && formatted.includes('来源：a.com') && formatted.includes('摘要：讲 LLM') && formatted.includes('高亮：关键段落'), formatted)
+  // 7-day window includes the same card and reports the range.
+  const formatted7 = formatCollectionForPrompt(reloaded, new Date(), 7)
+  check('format collection 7d window', formatted7.includes('AI 文章') && formatted7.includes('收藏时间范围：') && formatted7.includes('共 1 条'), formatted7)
   const llmCalls = []
   const llmStub = async (input, init) => {
     llmCalls.push(JSON.parse(init.body))
@@ -164,10 +167,21 @@ console.log('\n[sync]')
       apiKey: 'sk-test',
       model: 'deepseek-chat',
       prompt: '请生成简报：\n{collection}',
-    })
-    check('brief written', typeof briefPath === 'string' && briefPath.includes('今日收藏简报-'))
+    }, { days: 1 })
+    check('brief written (today)', typeof briefPath === 'string' && briefPath.includes('今日收藏简报-'))
     check('brief content', (await fsMod.readFile(briefPath, 'utf8')).includes('今日简报正文'))
     check('llm called with collection', llmCalls.length === 1 && llmCalls[0].messages[1].content.includes('AI 文章'))
+
+    // 7-day window writes a separate 最近N日收藏简报 file, not overwriting today's.
+    const brief7Path = await writeDailyBrief(reloaded, exportDir, {
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'sk-test',
+      model: 'deepseek-chat',
+      prompt: '请生成简报：\n{collection}',
+    }, { days: 7 })
+    check('brief written (7d, separate file)', typeof brief7Path === 'string' && brief7Path.includes('最近7日收藏简报-') && brief7Path !== briefPath)
+    const namesAfter7 = (await fsMod.readdir(exportDir)).filter((n) => n.includes('简报'))
+    check('both brief files exist', namesAfter7.some((n) => n.startsWith('今日收藏简报-')) && namesAfter7.some((n) => n.startsWith('最近7日收藏简报-')), namesAfter7.join(', '))
   } finally {
     globalThis.fetch = origFetch
   }

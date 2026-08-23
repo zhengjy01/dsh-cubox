@@ -136,8 +136,9 @@ export async function doSync(
     }
   }
 
-  // LLM daily brief: format today's collection, run it through the user's
-  // prompt, write 今日收藏简报-YYYY-MM-DD.md. Requires an LLM key + prompt.
+  // LLM brief: run the sync window's collection through the user's prompt and
+  // write the brief file (今日收藏简报-YYYY-MM-DD.md for 1 day, 最近N日收藏简报-… for
+  // wider windows — each window gets its own file). Requires an LLM key + prompt.
   let briefPath = ''
   if (outputDir.trim() !== '' && cfg.llmPrompt.trim() !== '' && llmConfigured({ baseUrl: cfg.llmBaseUrl, apiKey: cfg.llmApiKey, model: cfg.llmModel })) {
     try {
@@ -146,7 +147,7 @@ export async function doSync(
         apiKey: cfg.llmApiKey,
         model: cfg.llmModel,
         prompt: cfg.llmPrompt,
-      })
+      }, { days })
     } catch (briefError) {
       warnings.push('生成简报失败：' + String(briefError instanceof Error ? briefError.message : briefError))
     }
@@ -181,17 +182,29 @@ function cardAnnotationLines(card: CuboxCard, annotations: CuboxAnnotation[]): s
   return lines
 }
 
-/** Format today's cards into a plain text list for the LLM prompt. */
-export function formatCollectionForPrompt(cache: CuboxCache, date: Date): string {
+/**
+ * Format cards within a time window (from `end` going back `days` days) into
+ * a plain text list for the LLM prompt. Each entry: title (source), summary,
+ * annotations. A leading line states the covered time range so the model
+ * knows the window.
+ */
+export function formatCollectionForPrompt(cache: CuboxCache, end: Date, days: number): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
-  const isToday = (iso: string): boolean => {
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - (days - 1), 0, 0, 0, 0)
+  const startKey = start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate())
+  const endKey = end.getFullYear() + '-' + pad(end.getMonth() + 1) + '-' + pad(end.getDate())
+  const inWindow = (iso: string): boolean => {
     const d = new Date(iso)
-    return !Number.isNaN(d.getTime()) &&
-      d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate()
+    if (Number.isNaN(d.getTime())) return false
+    return d.getTime() >= start.getTime() && d.getTime() <= end.getTime()
   }
-  const cards = cache.cards.filter((c) => isToday(c.create_time)).sort((a, b) => b.create_time.localeCompare(a.create_time))
-  if (cards.length === 0) return '（今天没有新收藏）'
+  const cards = cache.cards.filter((c) => inWindow(c.create_time)).sort((a, b) => b.create_time.localeCompare(a.create_time))
   const lines: string[] = []
+  lines.push('收藏时间范围：' + (days === 1 ? endKey : startKey + ' 至 ' + endKey) + '（共 ' + cards.length + ' 条）')
+  if (cards.length === 0) {
+    lines.push('（该时间段内没有新收藏）')
+    return lines.join('\n')
+  }
   for (const [index, card] of cards.entries()) {
     const title = (card.title || card.article_title || card.url).trim()
     const domain = (() => { try { return new URL(card.url).hostname.replace(/^www\./, '') } catch { return card.domain ?? '' } })()
@@ -208,25 +221,33 @@ export function formatCollectionForPrompt(cache: CuboxCache, date: Date): string
   return lines.join('\n')
 }
 
-/** Generate the daily brief from the user's prompt and write it to the output dir. */
+/**
+ * Generate the brief from the user's prompt and write it to the output dir.
+ * File name reflects the window: 今日收藏简报-YYYY-MM-DD.md for days=1,
+ * 最近N日收藏简报-YYYY-MM-DD.md for days>1 (so a 7-day sync writes its own
+ * file instead of overwriting today's).
+ */
 export async function writeDailyBrief(
   cache: CuboxCache,
   outputDir: string,
   llm: LlmConfig & { prompt: string },
+  opts: { days?: number } = {},
 ): Promise<string> {
+  const days = typeof opts.days === 'number' && opts.days > 0 ? Math.floor(opts.days) : 1
   const now = new Date()
   const pad = (n: number): string => String(n).padStart(2, '0')
   const dateKey = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
-  const collection = formatCollectionForPrompt(cache, now)
+  const collection = formatCollectionForPrompt(cache, now, days)
   const user = llm.prompt.includes('{collection}')
     ? llm.prompt.replaceAll('{collection}', collection)
-    : llm.prompt + '\n\n【今日收藏列表】\n' + collection
+    : llm.prompt + '\n\n【收藏列表】\n' + collection
   const content = await chatComplete(
     { baseUrl: llm.baseUrl, apiKey: llm.apiKey, model: llm.model },
     '你是一个信息整理助手。严格按用户的 prompt 要求输出，直接输出内容本身，不要任何引导语。',
     user,
   )
-  const filePath = path.join(outputDir, '今日收藏简报-' + dateKey + '.md')
+  const prefix = days === 1 ? '今日收藏简报' : '最近' + days + '日收藏简报'
+  const filePath = path.join(outputDir, prefix + '-' + dateKey + '.md')
   await mkdir(outputDir, { recursive: true })
   await writeFile(filePath, content + '\n')
   return filePath

@@ -45,11 +45,23 @@ export declare function doSync(api: CuboxApi, store: CuboxStore, opts?: {
     limit?: number;
     outputDir?: string;
 }): Promise<SyncResult>;
-/** Format today's cards into a plain text list for the LLM prompt. */
-export declare function formatCollectionForPrompt(cache: CuboxCache, date: Date): string;
-/** Generate the daily brief from the user's prompt and write it to the output dir. */
+/**
+ * Format cards within a time window (from `end` going back `days` days) into
+ * a plain text list for the LLM prompt. Each entry: title (source), summary,
+ * annotations. A leading line states the covered time range so the model
+ * knows the window.
+ */
+export declare function formatCollectionForPrompt(cache: CuboxCache, end: Date, days: number): string;
+/**
+ * Generate the brief from the user's prompt and write it to the output dir.
+ * File name reflects the window: 今日收藏简报-YYYY-MM-DD.md for days=1,
+ * 最近N日收藏简报-YYYY-MM-DD.md for days>1 (so a 7-day sync writes its own
+ * file instead of overwriting today's).
+ */
 export declare function writeDailyBrief(cache: CuboxCache, outputDir: string, llm: LlmConfig & {
     prompt: string;
+}, opts?: {
+    days?: number;
 }): Promise<string>;
 /**
  * Write one markdown file per card into the output directory. Card files
