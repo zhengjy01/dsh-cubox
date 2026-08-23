@@ -136,7 +136,7 @@ export function apply(ctx: Context, config?: Config): void {
 /** Re-exports for host consumers and the smoke tests. */
 export { CuboxStore, mask, parseApiLink, configPath, cachePath, type CuboxConfigView, type CuboxCredentials } from './store.ts'
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts'
-export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxTodayTool, cuboxAnnotationsTool, cuboxCardsTool, buildTools, type ToolContext } from './tools.ts'
+export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxTodayTool, cuboxAnnotationsTool, cuboxCardsTool, buildTools, dateLabel, type ToolContext } from './tools.ts'
 export { doSync, readCache, writeCache, buildDailyOutline, buildAnnotationsSummary, type CuboxCache, type SyncResult } from './sync.ts'
 export { makeRoutes, CUBOX_API } from './routes.ts'
 export { defineTool }
