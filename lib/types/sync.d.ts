@@ -47,9 +47,9 @@ export declare function doSync(api: CuboxApi, store: CuboxStore, opts?: {
 }): Promise<SyncResult>;
 /**
  * Format cards within a time window (from `end` going back `days` days) into
- * a plain text list for the LLM prompt. Each entry: title (source), summary,
- * annotations. A leading line states the covered time range so the model
- * knows the window.
+ * a plain text list for the LLM prompt. Each entry: title (source), link,
+ * summary, annotations. A leading line states the covered time range so the
+ * model knows the window.
  */
 export declare function formatCollectionForPrompt(cache: CuboxCache, end: Date, days: number): string;
 /**

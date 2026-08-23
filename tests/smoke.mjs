@@ -145,7 +145,7 @@ console.log('\n[sync]')
   // Collection formatting + LLM brief (stubbed fetch).
   const { formatCollectionForPrompt, writeDailyBrief } = mod
   const formatted = formatCollectionForPrompt(reloaded, new Date(), 1)
-  check('format collection', formatted.includes('AI 文章') && formatted.includes('来源：a.com') && formatted.includes('摘要：讲 LLM') && formatted.includes('高亮：关键段落'), formatted)
+  check('format collection', formatted.includes('AI 文章') && formatted.includes('来源：a.com') && formatted.includes('链接：https://a.com/1') && formatted.includes('摘要：讲 LLM') && formatted.includes('高亮：关键段落'), formatted)
   // 7-day window includes the same card and reports the range.
   const formatted7 = formatCollectionForPrompt(reloaded, new Date(), 7)
   check('format collection 7d window', formatted7.includes('AI 文章') && formatted7.includes('收藏时间范围：') && formatted7.includes('共 1 条'), formatted7)

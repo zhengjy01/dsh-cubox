@@ -184,9 +184,9 @@ function cardAnnotationLines(card: CuboxCard, annotations: CuboxAnnotation[]): s
 
 /**
  * Format cards within a time window (from `end` going back `days` days) into
- * a plain text list for the LLM prompt. Each entry: title (source), summary,
- * annotations. A leading line states the covered time range so the model
- * knows the window.
+ * a plain text list for the LLM prompt. Each entry: title (source), link,
+ * summary, annotations. A leading line states the covered time range so the
+ * model knows the window.
  */
 export function formatCollectionForPrompt(cache: CuboxCache, end: Date, days: number): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
@@ -211,6 +211,7 @@ export function formatCollectionForPrompt(cache: CuboxCache, end: Date, days: nu
     const description = (card.description || '').trim()
     const annotationText = cardAnnotationLines(card, cache.annotations)
     lines.push((index + 1) + '. ' + title + '（来源：' + (domain || '未知') + '）')
+    if (card.url !== '') lines.push('   链接：' + card.url)
     if (description !== '') lines.push('   摘要：' + description)
     if (annotationText.length > 0) {
       lines.push('   标注：')
