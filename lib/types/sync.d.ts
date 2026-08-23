@@ -43,23 +43,11 @@ export declare function doSync(api: CuboxApi, store: CuboxStore, opts?: {
     limit?: number;
     outputDir?: string;
 }): Promise<SyncResult>;
-/** Domain of a card URL, or '' when unparsable. */
-export declare function cardDomain(card: CuboxCard): string;
 /**
- * Build a markdown outline of a date's collection (default: today) from the
- * cached cards. Sections: overview stats, then per-card entries with title,
- * source, URL, description, tags, and annotation count.
- */
-export declare function buildDailyOutline(cards: CuboxCard[], annotations: CuboxAnnotation[], dateLabel: string): string;
-/**
- * Aggregate annotations into a markdown summary grouped by card title.
- * Each entry: source card, the annotation text and its note, color, time.
- */
-export declare function buildAnnotationsSummary(annotations: CuboxAnnotation[], cardTitleById: Map<string, string>): string;
-/**
- * Write one markdown file per card plus a daily outline into the output
- * directory. Card files mirror the official Cubox Obsidian plugin layout
- * (frontmatter with id/cubox_url/url/tags + title + description + links +
- * annotations). Returns the number of files written.
+ * Write one markdown file per card into the output directory. Card files
+ * mirror the official Cubox Obsidian plugin layout (frontmatter with
+ * id/cubox_url/url/tags + title + description + links + annotations).
+ * Only today's cards are written (older ones were already exported).
+ * Returns the number of files written.
  */
 export declare function exportSyncToMarkdown(cache: CuboxCache, outputDir: string): Promise<number>;

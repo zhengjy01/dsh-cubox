@@ -35,11 +35,11 @@ const SECTION_ORDER = 165
 /** Model-facing announcement: plugin presence, capabilities, and limits. */
 export const CUBOX_GUIDANCE =
   '本机已安装 dsh-cubox 插件（Cubox 收藏同步）：配置一次 Cubox API 扩展链接（偏好设置 → 扩展中心和自动化 → API 扩展 → 启用并复制链接，形如 https://cubox.pro/c/api/save/xxxx）后，' +
-  '可用 cubox_sync 同步收藏（默认拉取今天，可 days 指定最近 N 天；若配置了 outputDir 导出目录，会同时把今日收藏写成 Markdown 到该目录）、cubox_today 生成今日收藏总结大纲（标题/来源/链接/描述/标注摘要）、' +
-  'cubox_annotations 汇总收录内容的笔记与标注（按天/关键词过滤、按收藏分组）、cubox_cards 按关键词/时间/标注状态查询收藏，cubox_config / cubox_status 配置与查看状态。' +
+  '可用 cubox_sync 同步收藏（默认拉取今天，可 days 指定最近 N 天；若配置了 outputDir 导出目录，会同时把今日收藏写成 Markdown 到该目录）、' +
+  'cubox_cards 按关键词/时间/标注状态查询收藏，cubox_config / cubox_status 配置与查看状态。' +
   '插件支持定时同步（配置 syncMinutes，默认每 60 分钟一次；cubox_config 可调 syncMinutes，0 关闭）。' +
   '凭据存 ~/.dsh/dsh-cubox.json（权限 0600），同步快照存 ~/.dsh/dsh-cubox-cache.json；cubox_status 不回显完整 token。' +
-  '也可在 Web 设置页「Cubox」面板中配置、选择导出目录与手动同步。用户提到「cubox / 收藏 / 稍后读 / 收录 / 标注汇总 / 今日收藏总结」时即指本插件，请据此协作。'
+  '也可在 Web 设置页「Cubox」面板中配置、选择导出目录与手动同步。用户提到「cubox / 收藏 / 稍后读 / 收录」时即指本插件，请据此协作。'
 
 /** Plugin config, read from the composition row. */
 export interface Config {
@@ -147,7 +147,7 @@ export function apply(ctx: Context, config?: Config): void {
 /** Re-exports for host consumers and the smoke tests. */
 export { CuboxStore, mask, parseApiLink, configPath, cachePath, type CuboxConfigView, type CuboxCredentials } from './store.ts'
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts'
-export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxTodayTool, cuboxAnnotationsTool, cuboxCardsTool, buildTools, dateLabel, type ToolContext } from './tools.ts'
-export { doSync, readCache, writeCache, buildDailyOutline, buildAnnotationsSummary, exportSyncToMarkdown, type CuboxCache, type SyncResult } from './sync.ts'
+export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, buildTools, type ToolContext } from './tools.ts'
+export { doSync, readCache, writeCache, exportSyncToMarkdown, type CuboxCache, type SyncResult } from './sync.ts'
 export { makeRoutes, CUBOX_API, type NativeDirectoryPicker } from './routes.ts'
 export { defineTool }

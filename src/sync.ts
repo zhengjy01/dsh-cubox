@@ -168,117 +168,17 @@ function tzOffset(date: Date): string {
   return sign + String(Math.floor(abs / 60)).padStart(2, '0') + String(abs % 60).padStart(2, '0')
 }
 
-/** Domain of a card URL, or '' when unparsable. */
-export function cardDomain(card: CuboxCard): string {
-  try {
-    return new URL(card.url).hostname.replace(/^www\./, '')
-  } catch {
-    return card.domain ?? ''
-  }
-}
-
 /**
- * Build a markdown outline of a date's collection (default: today) from the
- * cached cards. Sections: overview stats, then per-card entries with title,
- * source, URL, description, tags, and annotation count.
- */
-export function buildDailyOutline(cards: CuboxCard[], annotations: CuboxAnnotation[], dateLabel: string): string {
-  const lines: string[] = []
-  lines.push('# ' + dateLabel + ' 收藏总结大纲')
-  lines.push('')
-  lines.push('- 收藏 ' + cards.length + ' 条 · 标注 ' + annotations.length + ' 条')
-  if (cards.length === 0) {
-    lines.push('')
-    lines.push('今天还没有新收藏。')
-    return lines.join('\n')
-  }
-  lines.push('')
-  lines.push('## 收藏概览')
-  lines.push('')
-  const domains = new Map<string, number>()
-  for (const card of cards) {
-    const d = cardDomain(card)
-    domains.set(d, (domains.get(d) ?? 0) + 1)
-  }
-  for (const [domain, count] of [...domains.entries()].sort((a, b) => b[1] - a[1])) {
-    lines.push('- **' + (domain || '其他') + '**：' + count + ' 条')
-  }
-  lines.push('')
-  lines.push('## 收藏明细')
-  lines.push('')
-  for (const card of cards) {
-    const title = card.title || card.article_title || card.url
-    lines.push('### ' + title)
-    lines.push('')
-    lines.push('- 来源：' + (cardDomain(card) || '未知'))
-    if (card.url !== '') lines.push('- 链接：' + card.url)
-    if (card.description !== '') lines.push('- 描述：' + card.description.trim())
-    if (card.tags !== undefined && card.tags.length > 0) lines.push('- 标签：' + card.tags.join('、'))
-    const cardAnnotations = annotations.filter((a) => a.card_id === card.id)
-    if (cardAnnotations.length > 0) {
-      lines.push('- 标注 ' + cardAnnotations.length + ' 条：')
-      for (const a of cardAnnotations.slice(0, 5)) {
-        const parts: string[] = []
-        const highlight = (a.text || '').trim().replace(/\s+/g, ' ')
-        const note = (a.note || '').trim().replace(/\s+/g, ' ')
-        if (highlight !== '') parts.push(highlight)
-        if (note !== '') parts.push('笔记：' + note)
-        if (parts.length === 0) parts.push('（无文本内容）')
-        const snippet = parts.join(' ｜ ')
-        lines.push('  - ' + snippet.slice(0, 140) + (snippet.length > 140 ? '…' : ''))
-      }
-      if (cardAnnotations.length > 5) lines.push('  - …（其余 ' + (cardAnnotations.length - 5) + ' 条见缓存）')
-    }
-    lines.push('')
-  }
-  return lines.join('\n')
-}
-
-/**
- * Aggregate annotations into a markdown summary grouped by card title.
- * Each entry: source card, the annotation text and its note, color, time.
- */
-export function buildAnnotationsSummary(
-  annotations: CuboxAnnotation[],
-  cardTitleById: Map<string, string>,
-): string {
-  if (annotations.length === 0) return '（没有符合条件的标注/笔记）'
-  const byCard = new Map<string, CuboxAnnotation[]>()
-  for (const a of annotations) {
-    const list = byCard.get(a.card_id) ?? []
-    list.push(a)
-    byCard.set(a.card_id, list)
-  }
-  const lines: string[] = ['共 ' + annotations.length + ' 条标注/笔记：', '']
-  for (const [cardId, list] of byCard) {
-    const title = cardTitleById.get(cardId) ?? cardId
-    lines.push('### ' + title)
-    lines.push('')
-    for (const a of list) {
-      const parts: string[] = []
-      if (a.text !== '') parts.push('高亮：' + a.text.trim())
-      if (a.note !== '') parts.push('笔记：' + a.note.trim())
-      if (parts.length === 0) parts.push('（无文本内容）')
-      lines.push('- ' + parts.join(' ｜ '))
-      if (a.color !== '') lines.push('  - 颜色：' + a.color)
-      if (a.create_time !== '') lines.push('  - 时间：' + a.create_time)
-    }
-    lines.push('')
-  }
-  return lines.join('\n')
-}
-
-/**
- * Write one markdown file per card plus a daily outline into the output
- * directory. Card files mirror the official Cubox Obsidian plugin layout
- * (frontmatter with id/cubox_url/url/tags + title + description + links +
- * annotations). Returns the number of files written.
+ * Write one markdown file per card into the output directory. Card files
+ * mirror the official Cubox Obsidian plugin layout (frontmatter with
+ * id/cubox_url/url/tags + title + description + links + annotations).
+ * Only today's cards are written (older ones were already exported).
+ * Returns the number of files written.
  */
 export async function exportSyncToMarkdown(cache: CuboxCache, outputDir: string): Promise<number> {
   await mkdir(outputDir, { recursive: true })
   const today = new Date()
   const pad = (n: number): string => String(n).padStart(2, '0')
-  const todayKey = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate())
 
   let written = 0
   // One file per card (only today's cards — older ones already exported).
@@ -326,22 +226,6 @@ export async function exportSyncToMarkdown(cache: CuboxCache, outputDir: string)
       parts.push('')
     }
     await writeFile(filePath, parts.join('\n'))
-    written += 1
-  }
-
-  // Daily outline file.
-  const outlineCards = cache.cards.filter((c) => {
-    const d = new Date(c.create_time)
-    return !Number.isNaN(d.getTime()) && d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
-  })
-  const outlineAnnotations = cache.annotations.filter((a) => {
-    const d = new Date(a.create_time)
-    return !Number.isNaN(d.getTime()) && d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
-  })
-  if (outlineCards.length > 0 || outlineAnnotations.length > 0) {
-    const outline = buildDailyOutline(outlineCards, outlineAnnotations, todayKey)
-    const outlinePath = path.join(outputDir, '收藏总结-' + todayKey + '.md')
-    await writeFile(outlinePath, outline + '\n')
     written += 1
   }
 

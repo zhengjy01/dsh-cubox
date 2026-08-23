@@ -99,7 +99,7 @@ console.log('\n[sync]')
   const { CuboxStore } = mod
   const store = new CuboxStore()
   await store.patch({ token: 'tok12345' })
-  const { readCache, writeCache, buildDailyOutline, buildAnnotationsSummary } = mod
+  const { readCache, writeCache } = mod
   const cache = await readCache()
   check('empty cache', cache.cards.length === 0 && cache.annotations.length === 0)
 
@@ -114,14 +114,6 @@ console.log('\n[sync]')
   const reloaded = await readCache()
   check('cache round-trip', reloaded.cards.length === 1 && reloaded.annotations.length === 1)
 
-  const outline = buildDailyOutline(reloaded.cards, reloaded.annotations, '2026-08-23')
-  check('outline has title', outline.includes('AI 文章'))
-  check('outline has annotation snippet', outline.includes('关键段落') && outline.includes('我的笔记'))
-
-  const titleById = new Map([['c1', 'AI 文章']])
-  const summary = buildAnnotationsSummary(reloaded.annotations, titleById)
-  check('annotation summary grouped', summary.includes('AI 文章') && summary.includes('高亮：关键段落') && summary.includes('笔记：我的笔记'))
-
   const { doSync } = mod
   const stubFetch = async () => ({
     ok: true,
@@ -135,14 +127,14 @@ console.log('\n[sync]')
   const viewAfter = await store.view()
   check('doSync stamps lastSyncAt', viewAfter.lastSyncAt !== '')
 
-  // Markdown export to an output dir.
+  // Markdown export to an output dir: one file per card, no outline file.
   const exportDir = path.join(tmp, 'export')
   const { exportSyncToMarkdown } = mod
   const written = await exportSyncToMarkdown(reloaded, exportDir)
-  check('export writes card + outline', written === 2, 'written=' + written)
+  check('export writes card only', written === 1, 'written=' + written)
   const fsMod = await import('node:fs/promises')
   const names = (await fsMod.readdir(exportDir)).sort()
-  check('export filenames', names.some((n) => n.includes('AI 文章')) && names.some((n) => n.startsWith('收藏总结-')), names.join(', '))
+  check('export filenames', names.some((n) => n.includes('AI 文章')) && !names.some((n) => n.startsWith('收藏总结-')), names.join(', '))
   const cardFile = names.find((n) => n.includes('AI 文章'))
   const cardContent = await fsMod.readFile(path.join(exportDir, cardFile), 'utf8')
   check('card frontmatter + links', cardContent.includes('cubox_url: https://cubox.pro/web/card/c1') && cardContent.includes('[Read Original](') && cardContent.includes('## 标注') && cardContent.includes('关键段落'), '')
@@ -162,7 +154,7 @@ console.log('\n[apply]')
     interval: () => () => {},
   }
   mod.apply(ctx, { syncMinutes: 0 })
-  const tools = ['cubox_status', 'cubox_config', 'cubox_sync', 'cubox_today', 'cubox_annotations', 'cubox_cards']
+  const tools = ['cubox_status', 'cubox_config', 'cubox_sync', 'cubox_cards']
   for (const name of tools) check('tool registered: ' + name, registered.includes(name))
   check('section registered', registered.includes('section:plugin:dsh-cubox'))
   check('routes registered', registered.includes('route:/api/dsh-cubox/config') && registered.includes('route:/api/dsh-cubox/sync') && registered.includes('route:/api/dsh-cubox/pick-dir'))

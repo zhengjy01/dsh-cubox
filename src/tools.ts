@@ -12,7 +12,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CuboxApi } from './api.ts'
 import { CuboxApiError } from './api.ts'
 import type { CuboxStore } from './store.ts'
-import { readCache, doSync, buildDailyOutline, buildAnnotationsSummary } from './sync.ts'
+import { readCache, doSync } from './sync.ts'
 
 /** One text content block (the only render shape these tools emit). */
 function text(value: string): ContentBlock[] {
@@ -29,23 +29,6 @@ export interface ToolContext {
 function apiError(err: unknown): string {
   if (err instanceof CuboxApiError) return err.message
   return String(err instanceof Error ? err.message : err)
-}
-
-/** Date label in local time: YYYY-MM-DD (weekday). */
-export function dateLabel(date: Date): string {
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return (
-    date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-    '（周' + weekdays[date.getDay()] + '）'
-  )
-}
-
-/** Is this card created on the given local date? */
-function isSameLocalDate(iso: string, date: Date): boolean {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return false
-  return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate()
 }
 
 /** Status tool: configuration + latest sync snapshot summary. */
@@ -198,111 +181,6 @@ export function cuboxSyncTool(ctx: ToolContext) {
   })
 }
 
-/** Today tool: render a daily outline (summary) of today's collection. */
-export function cuboxTodayTool(ctx: ToolContext) {
-  return defineTool({
-    name: 'cubox_today',
-    description: '生成今日收藏总结大纲：读取本地缓存中今天收藏的卡片与标注，输出 Markdown 大纲（统计 + 来源分布 + 每条收藏的标题/来源/链接/描述/标注摘要）。若缓存里没有今天的数据，会先自动同步（等价 cubox_sync days=1）。',
-    parameters: {},
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          ok: { type: 'boolean', required: true },
-          message: { type: 'string', required: true },
-          date: { type: 'string' },
-          cardCount: { type: 'number' },
-          annotationCount: { type: 'number' },
-        },
-      },
-      render: (_args: unknown, value: Record<string, unknown>) => text(String(value.message ?? '')),
-    },
-    async execute() {
-      const view = await ctx.store.view()
-      if (!view.configured) {
-        return { ok: false, message: '未配置 Cubox API 链接：请先提供 API 扩展链接并调用 cubox_config。' }
-      }
-      let cache = await readCache()
-      const now = new Date()
-      if (cache.cards.filter((c) => isSameLocalDate(c.create_time, now)).length === 0 && cache.updatedAt === '') {
-        await doSync(ctx.api, ctx.store, { days: 1, limit: 200 })
-        cache = await readCache()
-      }
-      const cards = cache.cards.filter((c) => isSameLocalDate(c.create_time, now))
-      const annotations = cache.annotations.filter((a) => isSameLocalDate(a.create_time, now))
-      const outline = buildDailyOutline(cards, annotations, dateLabel(now))
-      return { ok: true, message: outline, date: dateLabel(now), cardCount: cards.length, annotationCount: annotations.length }
-    },
-  })
-}
-
-/** Annotations tool: aggregate highlights/notes across cards. */
-export function cuboxAnnotationsTool(ctx: ToolContext) {
-  return defineTool({
-    name: 'cubox_annotations',
-    description: '汇总 Cubox 收录内容的笔记与标注：跨收藏筛选高亮/笔记（可限制最近 N 天，默认今天；可用 keyword 过滤内容），按收藏分组输出 Markdown 汇总（来源卡片 + 高亮文本 + 笔记 + 颜色 + 时间）。',
-    parameters: {
-      days: { type: 'number', description: '时间窗口天数（默认 1 = 今天）' },
-      keyword: { type: 'string', description: '按内容关键词过滤' },
-      limit: { type: 'number', description: '标注拉取上限（默认 500）' },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          ok: { type: 'boolean', required: true },
-          message: { type: 'string', required: true },
-          count: { type: 'number' },
-          scope: { type: 'string' },
-        },
-      },
-      render: (_args: unknown, value: Record<string, unknown>) => text(String(value.message ?? '')),
-    },
-    async execute(args: { days?: number; keyword?: string; limit?: number }) {
-      const view = await ctx.store.view()
-      if (!view.configured) {
-        return { ok: false, message: '未配置 Cubox API 链接：请先提供 API 扩展链接并调用 cubox_config。' }
-      }
-      const days = typeof args?.days === 'number' && args.days > 0 ? Math.floor(args.days) : 1
-      const limit = typeof args?.limit === 'number' && args.limit > 0 ? Math.floor(args.limit) : 500
-      const keyword = typeof args?.keyword === 'string' ? args.keyword.trim() : ''
-      const now = new Date()
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1), 0, 0, 0, 0)
-
-      let annotations
-      try {
-        annotations = await ctx.api.filterAnnotations({
-          start_time: formatLocal(start),
-          end_time: formatLocal(now),
-          keyword: keyword === '' ? undefined : keyword,
-          limit,
-        })
-      } catch (error) {
-        return { ok: false, message: '拉取标注失败：' + apiError(error) }
-      }
-
-      // Resolve card titles for grouping (from cache first, then live detail).
-      const cache = await readCache()
-      const titleById = new Map<string, string>()
-      for (const card of cache.cards) titleById.set(card.id, card.title || card.url)
-      for (const a of annotations) {
-        if (!titleById.has(a.card_id)) {
-          try {
-            const detail = await ctx.api.cardDetail(a.card_id)
-            titleById.set(a.card_id, detail.title || detail.url)
-          } catch {
-            titleById.set(a.card_id, a.card_id)
-          }
-        }
-      }
-      const summary = buildAnnotationsSummary(annotations, titleById)
-      return { ok: true, message: summary, count: annotations.length, scope: days === 1 ? '今天' : '最近 ' + days + ' 天' }
-    },
-  })
-}
-
 /** Cards tool: query the collection with filters. */
 export function cuboxCardsTool(ctx: ToolContext) {
   return defineTool({
@@ -413,8 +291,6 @@ export function buildTools(ctx: ToolContext) {
     cuboxStatusTool(ctx),
     cuboxConfigTool(ctx),
     cuboxSyncTool(ctx),
-    cuboxTodayTool(ctx),
-    cuboxAnnotationsTool(ctx),
     cuboxCardsTool(ctx),
   ]
 }

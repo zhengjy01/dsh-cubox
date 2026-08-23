@@ -4,7 +4,8 @@
  * Requires a real API-extension link. Run:
  *   DSH_CUBOX_API_LINK="https://cubox.pro/c/api/save/xxxx" node tests/live.mjs
  *
- * Exercises: config → sync (today) → today outline → annotations summary →
+ * Exercises: config → sync (today) → export markdown (per card, no outline)
+ * → annotations → cards query.
  * cards query → status. Uses temp config/cache files; nothing is written to
  * the real ~/.dsh store.
  */
@@ -32,7 +33,7 @@ function check(name, condition, detail = '') {
   else { failures += 1; console.error('  ❌ ' + name + (detail !== '' ? ' — ' + detail : '')) }
 }
 
-const { CuboxStore, CuboxApi, doSync, readCache, buildDailyOutline, buildAnnotationsSummary, dateLabel } = mod
+const { CuboxStore, CuboxApi, doSync, readCache, exportSyncToMarkdown } = mod
 const store = new CuboxStore()
 const view = await store.patch({ apiLink: link })
 check('配置生效', view.configured === true, JSON.stringify(view))
@@ -57,19 +58,18 @@ for (const card of cache.cards.slice(0, 5)) {
   console.log('    - ' + (card.title || card.url) + '（' + card.create_time + '）')
 }
 
-console.log('\n[today outline]')
+console.log('\n[markdown export]')
 const now = new Date()
-const todayCards = cache.cards.filter((c) => {
+const exportDir = path.join(tmp, 'export')
+const exported = await exportSyncToMarkdown(cache, exportDir)
+check('导出卡片 md（无大纲文件）', exported === cache.cards.filter((c) => {
   const d = new Date(c.create_time)
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-})
-const todayAnnotations = cache.annotations.filter((a) => {
-  const d = new Date(a.create_time)
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-})
-const outline = buildDailyOutline(todayCards, todayAnnotations, dateLabel(now))
-check('大纲包含标题', outline.includes('收藏总结大纲'))
-console.log(outline.slice(0, 600))
+}).length, 'exported=' + exported)
+const fsMod = await import('node:fs/promises')
+const exportNames = (await fsMod.readdir(exportDir)).sort()
+check('无收藏总结大纲文件', !exportNames.some((n) => n.startsWith('收藏总结-')), exportNames.join(', '))
+if (exportNames.length > 0) console.log('  导出文件：' + exportNames.join(', '))
 
 console.log('\n[annotations]')
 let ann = []
