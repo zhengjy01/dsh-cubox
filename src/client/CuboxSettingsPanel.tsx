@@ -58,6 +58,22 @@ const s = {
   } as const,
   msg: { fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all', opacity: 0.9 } as const,
   hint: { fontSize: '11px', opacity: 0.75, lineHeight: 1.6 } as const,
+  section: { fontWeight: 600, fontSize: '12px', margin: '6px 0 0', opacity: 0.9 } as const,
+  textarea: {
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '6px 8px',
+    borderRadius: '6px',
+    border: '1px solid rgba(128,128,128,0.35)',
+    background: 'rgba(128,128,128,0.08)',
+    color: 'inherit',
+    fontSize: '12px',
+    fontFamily: 'inherit',
+    minHeight: '120px',
+    resize: 'vertical',
+    lineHeight: 1.5,
+  } as const,
+  checkRow: { display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px' } as const,
 }
 
 /** Status line for the current config view. */
@@ -71,7 +87,9 @@ function statusText(view: CuboxStatusView | null): string {
     ' · 定时同步每 ' + view.syncMinutes + ' 分钟' +
     ' · 最近同步 ' + (view.lastSyncAt !== '' ? view.lastSyncAt : '从未') +
     ' · 缓存卡片 ' + view.cachedCards + ' 条 / 标注 ' + view.cachedAnnotations + ' 条' +
-    ' · 导出目录 ' + (view.outputDir !== '' ? view.outputDir : '未设置')
+    ' · 导出目录 ' + (view.outputDir !== '' ? view.outputDir : '未设置') +
+    ' · 卡片导出 ' + (view.exportCards ? '开' : '关') +
+    ' · AI 简报 ' + (view.llmKeyMasked !== '' ? '已配置' : '未配置')
   )
 }
 
@@ -82,6 +100,11 @@ export function CuboxSettingsPanel(): JSX.Element {
   const [server, setServer] = useState('cubox.pro')
   const [syncMinutes, setSyncMinutes] = useState('60')
   const [outputDir, setOutputDir] = useState('')
+  const [exportCards, setExportCards] = useState(true)
+  const [llmBaseUrl, setLlmBaseUrl] = useState('https://api.deepseek.com/v1')
+  const [llmApiKey, setLlmApiKey] = useState('')
+  const [llmModel, setLlmModel] = useState('deepseek-chat')
+  const [llmPrompt, setLlmPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -90,6 +113,11 @@ export function CuboxSettingsPanel(): JSX.Element {
       const next = await api.getStatus()
       setView(next)
       if (next.outputDir !== '') setOutputDir(next.outputDir)
+      setExportCards(next.exportCards)
+      setLlmBaseUrl(next.llmBaseUrl)
+      setLlmModel(next.llmModel)
+      setLlmPrompt(next.llmPrompt)
+      if (next.llmKeyMasked === '') setLlmApiKey('')
     } catch (error) {
       setMessage('状态读取失败: ' + String(error instanceof Error ? error.message : error))
     }
@@ -103,12 +131,22 @@ export function CuboxSettingsPanel(): JSX.Element {
     setBusy(true)
     setMessage('')
     try {
-      const patch: Record<string, unknown> = { server, syncMinutes: Number(syncMinutes) || 0, outputDir: outputDir.trim() }
+      const patch: Record<string, unknown> = {
+        server,
+        syncMinutes: Number(syncMinutes) || 0,
+        outputDir: outputDir.trim(),
+        exportCards,
+        llmBaseUrl: llmBaseUrl.trim(),
+        llmModel: llmModel.trim(),
+        llmPrompt,
+      }
       if (apiLink.trim() !== '') patch.apiLink = apiLink.trim()
+      if (llmApiKey.trim() !== '') patch.llmApiKey = llmApiKey.trim()
       const next = await api.setConfig(patch)
       setView({ ...next, cachedCards: view?.cachedCards ?? 0, cachedAnnotations: view?.cachedAnnotations ?? 0, cacheUpdatedAt: view?.cacheUpdatedAt ?? '' })
       setMessage(next.configured ? '配置已保存。' : '配置未保存完整：缺少 token。')
       setApiLink('')
+      if (next.llmKeyMasked !== '') setLlmApiKey('')
     } catch (error) {
       setMessage('保存失败: ' + String(error instanceof Error ? error.message : error))
     } finally {
@@ -123,6 +161,7 @@ export function CuboxSettingsPanel(): JSX.Element {
       const next = await api.setConfig({ reset: true })
       setView({ ...next, cachedCards: 0, cachedAnnotations: 0, cacheUpdatedAt: '' })
       setOutputDir('')
+      setLlmApiKey('')
       setMessage('已清除配置。')
     } catch (error) {
       setMessage('清除失败: ' + String(error instanceof Error ? error.message : error))
@@ -202,6 +241,45 @@ export function CuboxSettingsPanel(): JSX.Element {
         />
         <button style={s.button} onClick={() => void pickFolder()} disabled={busy}>选择文件夹…</button>
       </div>
+      <div style={s.checkRow}>
+        <input
+          type="checkbox"
+          id="cubox-export-cards"
+          checked={exportCards}
+          onChange={(e) => setExportCards(e.target.checked)}
+        />
+        <label htmlFor="cubox-export-cards">每张收藏导出一个 md 文件（关闭后只生成 AI 简报）</label>
+      </div>
+      <h4 style={s.section}>AI 简报（按提示词生成今日收藏简报）</h4>
+      <div style={s.row}>
+        <input
+          style={s.input}
+          placeholder="LLM Base URL（OpenAI 兼容）"
+          value={llmBaseUrl}
+          onChange={(e) => setLlmBaseUrl(e.target.value)}
+        />
+        <input
+          style={{ ...s.input, width: '150px' }}
+          placeholder="模型"
+          value={llmModel}
+          onChange={(e) => setLlmModel(e.target.value)}
+        />
+      </div>
+      <div style={s.row}>
+        <input
+          style={s.input}
+          placeholder={'LLM API Key' + (view !== null && view.llmKeyMasked !== '' ? '（已保存 ' + view.llmKeyMasked + '，留空保持不变）' : '')}
+          type="password"
+          value={llmApiKey}
+          onChange={(e) => setLlmApiKey(e.target.value)}
+        />
+      </div>
+      <textarea
+        style={s.textarea}
+        placeholder={'提示词模板：{collection} 会被替换为今日收藏列表'}
+        value={llmPrompt}
+        onChange={(e) => setLlmPrompt(e.target.value)}
+      />
       <div style={s.row}>
         <button style={s.button} onClick={() => void runSync(1)} disabled={busy}>同步今天</button>
         <button style={s.button} onClick={() => void runSync(7)} disabled={busy}>同步最近 7 天</button>
@@ -210,7 +288,7 @@ export function CuboxSettingsPanel(): JSX.Element {
       <div style={s.hint}>
         API 扩展链接获取：Cubox 偏好设置 → 扩展中心和自动化 → API 扩展 → 启用并复制链接。链接是个人身份凭证，请勿泄露。
         token 与同步快照分别存于 ~/.dsh/dsh-cubox.json 与 ~/.dsh/dsh-cubox-cache.json（权限 0600）。
-        配置导出目录后，每次同步会把今日收藏写成 Markdown（每卡片一个文件 + 每日总结大纲）到该目录。
+        配置导出目录后，每次同步会按上方设置写入：勾选卡片时每张收藏一个 md；配置了 AI Key 时按提示词生成「今日收藏简报-日期.md」到该目录（{'{collection}'} 替换为今日收藏列表，未包含则自动追加）。
       </div>
     </div>
   )

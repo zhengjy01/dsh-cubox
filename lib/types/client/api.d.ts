@@ -10,6 +10,11 @@ export interface CuboxConfigView {
     syncMinutes: number;
     lastSyncAt: string;
     outputDir: string;
+    exportCards: boolean;
+    llmBaseUrl: string;
+    llmModel: string;
+    llmKeyMasked: string;
+    llmPrompt: string;
     configPath: string;
 }
 /** Status view with cache stats. */
@@ -27,6 +32,7 @@ export interface CuboxSyncResult {
     cachedCards: number;
     cachedAnnotations: number;
     exportedFiles: number;
+    briefPath: string;
 }
 /** Error carrying the route's JSON error message. */
 export declare class CuboxApiError extends Error {

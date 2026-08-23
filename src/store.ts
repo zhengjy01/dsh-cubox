@@ -51,7 +51,31 @@ export interface CuboxCredentials {
   lastSyncAt: string
   /** Local directory for markdown export on sync ('' = no export). */
   outputDir: string
+  /** Whether to write one markdown file per card on sync (default true). */
+  exportCards: boolean
+  /** LLM base URL (OpenAI-compatible). */
+  llmBaseUrl: string
+  /** LLM API key. */
+  llmApiKey: string
+  /** LLM model name. */
+  llmModel: string
+  /** Prompt template for the daily brief; {collection} is replaced with the formatted collection. */
+  llmPrompt: string
 }
+
+/** Default prompt for the daily collection brief. */
+export const DEFAULT_LLM_PROMPT =
+  '你是一个信息整理助手。请根据以下我今日收藏的内容列表，生成一份"今日收藏简报"。\n' +
+  '\n' +
+  '【今日收藏列表】\n' +
+  '{collection}\n' +
+  '\n' +
+  '请按以下要求输出纯文本简报（不要用markdown符号，不要加粗，不要列表符号，只用自然段落和换行）：\n' +
+  '\n' +
+  '1. 摘要总结：用3-5句话概括今天收藏的整体主题和覆盖范围。\n' +
+  '2. 突出重点：按重要性从高到低，列出今日最值得关注的3条内容。每条单独一段，格式为"重点一：xxx。理由：xxx。"\n' +
+  '3. 分类概览：按类型（如技术文章/行业资讯/生活灵感/工具资源）统计数量分布，用一句话说清楚，例如"今日共收藏X条，其中技术类X条，资讯类X条，生活类X条。"\n' +
+  '4. 总字数控制在300字以内，语言精炼，一目了然。不要出现"根据提供的列表"、"以下是"之类的引导语，直接输出内容本身。'
 
 /** Public, secret-free status view. */
 export interface CuboxConfigView {
@@ -61,6 +85,11 @@ export interface CuboxConfigView {
   syncMinutes: number
   lastSyncAt: string
   outputDir: string
+  exportCards: boolean
+  llmBaseUrl: string
+  llmModel: string
+  llmKeyMasked: string
+  llmPrompt: string
   configPath: string
 }
 
@@ -101,7 +130,18 @@ function lastSegment(pathname: string): string {
 
 /** Empty credentials record. */
 function empty(): CuboxCredentials {
-  return { server: 'cubox.pro', token: '', syncMinutes: 60, lastSyncAt: '', outputDir: '' }
+  return {
+    server: 'cubox.pro',
+    token: '',
+    syncMinutes: 60,
+    lastSyncAt: '',
+    outputDir: '',
+    exportCards: true,
+    llmBaseUrl: 'https://api.deepseek.com/v1',
+    llmApiKey: '',
+    llmModel: 'deepseek-chat',
+    llmPrompt: DEFAULT_LLM_PROMPT,
+  }
 }
 
 /** Parse an unknown JSON record into credentials (tolerates missing keys). */
@@ -110,12 +150,18 @@ function parse(raw: unknown): CuboxCredentials {
   const server = record.server === 'cubox.cc' ? 'cubox.cc' : 'cubox.pro'
   const str = (value: unknown): string => (typeof value === 'string' ? value : '')
   const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 60)
+  const bool = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback)
   return {
     server,
     token: str(record.token),
     syncMinutes: num(record.syncMinutes),
     lastSyncAt: str(record.lastSyncAt),
     outputDir: str(record.outputDir),
+    exportCards: bool(record.exportCards, true),
+    llmBaseUrl: str(record.llmBaseUrl) || 'https://api.deepseek.com/v1',
+    llmApiKey: str(record.llmApiKey),
+    llmModel: str(record.llmModel) || 'deepseek-chat',
+    llmPrompt: str(record.llmPrompt) || DEFAULT_LLM_PROMPT,
   }
 }
 
@@ -155,13 +201,19 @@ export class CuboxStore {
       syncMinutes: cfg.syncMinutes,
       lastSyncAt: cfg.lastSyncAt,
       outputDir: cfg.outputDir,
+      exportCards: cfg.exportCards,
+      llmBaseUrl: cfg.llmBaseUrl,
+      llmModel: cfg.llmModel,
+      llmKeyMasked: cfg.llmApiKey.trim() !== '' ? mask(cfg.llmApiKey) : '',
+      llmPrompt: cfg.llmPrompt,
       configPath: configPath(),
     }
   }
 
   /**
    * Apply a config patch: apiLink (parse into server+token) / server / token
-   * / syncMinutes / outputDir replace, reset clears. Returns the public view.
+   * / syncMinutes / outputDir / exportCards / LLM fields replace, reset clears.
+   * Returns the public view.
    */
   async patch(args: Record<string, unknown> | undefined): Promise<CuboxConfigView> {
     const cfg = await this.load()
@@ -184,6 +236,11 @@ export class CuboxStore {
       next.syncMinutes = Math.max(0, Math.floor(args.syncMinutes))
     }
     if (args !== undefined && typeof args.outputDir === 'string') next.outputDir = args.outputDir.trim()
+    if (args !== undefined && typeof args.exportCards === 'boolean') next.exportCards = args.exportCards
+    if (args !== undefined && typeof args.llmBaseUrl === 'string') next.llmBaseUrl = args.llmBaseUrl.trim()
+    if (args !== undefined && typeof args.llmApiKey === 'string') next.llmApiKey = args.llmApiKey.trim()
+    if (args !== undefined && typeof args.llmModel === 'string') next.llmModel = args.llmModel.trim()
+    if (args !== undefined && typeof args.llmPrompt === 'string') next.llmPrompt = args.llmPrompt
     await this.save(next)
     return this.view()
   }

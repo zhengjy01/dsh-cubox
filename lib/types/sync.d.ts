@@ -1,15 +1,15 @@
 /**
  * dsh-cubox — core sync/business logic.
  *
- * doSync pulls cards (and optionally today's annotations) from the Cubox
- * API and persists a snapshot to ~/.dsh/dsh-cubox-cache.json so agents can
- * answer "what did I save today" without another round trip. buildTodayOutline
- * renders today's collection into a markdown outline (title + source +
- * description + annotation summary); buildAnnotationsSummary aggregates
- * highlights/notes across cards.
+ * doSync pulls cards (and today's annotations) from the Cubox API, persists
+ * a snapshot to ~/.dsh/dsh-cubox-cache.json, and exports to the configured
+ * output dir: optionally one markdown file per card (exportCards), and — when
+ * an LLM key is configured — a daily brief generated from the user's prompt
+ * template ({collection} placeholder), written as 今日收藏简报-YYYY-MM-DD.md.
  */
 import type { CuboxApi, CuboxCard, CuboxAnnotation } from './api.ts';
 import type { CuboxStore } from './store.ts';
+import { type LlmConfig } from './llm.ts';
 /** Sync snapshot persisted to the cache file. */
 export interface CuboxCache {
     updatedAt: string;
@@ -27,6 +27,8 @@ export interface SyncResult {
     since: string;
     /** Number of markdown files written to the output dir (0 = none). */
     exportedFiles: number;
+    /** Path of the LLM daily brief written ('' = not written). */
+    briefPath: string;
 }
 /** Parse the cache file (missing/unreadable → empty). */
 export declare function readCache(): Promise<CuboxCache>;
@@ -43,6 +45,12 @@ export declare function doSync(api: CuboxApi, store: CuboxStore, opts?: {
     limit?: number;
     outputDir?: string;
 }): Promise<SyncResult>;
+/** Format today's cards into a plain text list for the LLM prompt. */
+export declare function formatCollectionForPrompt(cache: CuboxCache, date: Date): string;
+/** Generate the daily brief from the user's prompt and write it to the output dir. */
+export declare function writeDailyBrief(cache: CuboxCache, outputDir: string, llm: LlmConfig & {
+    prompt: string;
+}): Promise<string>;
 /**
  * Write one markdown file per card into the output directory. Card files
  * mirror the official Cubox Obsidian plugin layout (frontmatter with

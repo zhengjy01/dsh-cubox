@@ -1,12 +1,11 @@
 /**
  * dsh-cubox — core sync/business logic.
  *
- * doSync pulls cards (and optionally today's annotations) from the Cubox
- * API and persists a snapshot to ~/.dsh/dsh-cubox-cache.json so agents can
- * answer "what did I save today" without another round trip. buildTodayOutline
- * renders today's collection into a markdown outline (title + source +
- * description + annotation summary); buildAnnotationsSummary aggregates
- * highlights/notes across cards.
+ * doSync pulls cards (and today's annotations) from the Cubox API, persists
+ * a snapshot to ~/.dsh/dsh-cubox-cache.json, and exports to the configured
+ * output dir: optionally one markdown file per card (exportCards), and — when
+ * an LLM key is configured — a daily brief generated from the user's prompt
+ * template ({collection} placeholder), written as 今日收藏简报-YYYY-MM-DD.md.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
@@ -15,6 +14,7 @@ import type { CuboxApi, CuboxCard, CuboxAnnotation } from './api.ts'
 import { todayRange } from './api.ts'
 import type { CuboxStore } from './store.ts'
 import { cachePath } from './store.ts'
+import { chatComplete, llmConfigured, type LlmConfig } from './llm.ts'
 
 /** Sync snapshot persisted to the cache file. */
 export interface CuboxCache {
@@ -34,6 +34,8 @@ export interface SyncResult {
   since: string
   /** Number of markdown files written to the output dir (0 = none). */
   exportedFiles: number
+  /** Path of the LLM daily brief written ('' = not written). */
+  briefPath: string
 }
 
 /** Parse the cache file (missing/unreadable → empty). */
@@ -121,11 +123,12 @@ export async function doSync(
   await writeCache(cache)
   await store.save({ ...(await store.load()), lastSyncAt: cache.updatedAt })
 
-  // Markdown export to the configured output dir ('' = disabled). Export
-  // failures degrade gracefully — the snapshot is already saved.
-  const outputDir = typeof opts.outputDir === 'string' ? opts.outputDir : (await store.load()).outputDir
+  // Export to the configured output dir ('' = disabled). Failures degrade
+  // gracefully — the snapshot is already saved.
+  const cfg = await store.load()
+  const outputDir = typeof opts.outputDir === 'string' ? opts.outputDir : cfg.outputDir
   let exportedFiles = 0
-  if (outputDir.trim() !== '') {
+  if (outputDir.trim() !== '' && cfg.exportCards !== false) {
     try {
       exportedFiles = await exportSyncToMarkdown(cache, outputDir.trim())
     } catch (exportError) {
@@ -133,10 +136,27 @@ export async function doSync(
     }
   }
 
+  // LLM daily brief: format today's collection, run it through the user's
+  // prompt, write 今日收藏简报-YYYY-MM-DD.md. Requires an LLM key + prompt.
+  let briefPath = ''
+  if (outputDir.trim() !== '' && cfg.llmPrompt.trim() !== '' && llmConfigured({ baseUrl: cfg.llmBaseUrl, apiKey: cfg.llmApiKey, model: cfg.llmModel })) {
+    try {
+      briefPath = await writeDailyBrief(cache, outputDir.trim(), {
+        baseUrl: cfg.llmBaseUrl,
+        apiKey: cfg.llmApiKey,
+        model: cfg.llmModel,
+        prompt: cfg.llmPrompt,
+      })
+    } catch (briefError) {
+      warnings.push('生成简报失败：' + String(briefError instanceof Error ? briefError.message : briefError))
+    }
+  }
+
   const message =
     '同步完成：拉取卡片 ' + cards.length + ' 条、标注 ' + annotations.length + ' 条；' +
     '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。' +
-    (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个 Markdown 文件到 ' + outputDir.trim() : '') +
+    (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个收藏 Markdown 到 ' + outputDir.trim() : '') +
+    (briefPath !== '' ? '已生成简报：' + briefPath : '') +
     (warnings.length > 0 ? '\n警告：' + warnings.join('；') : '')
   return {
     ok: true,
@@ -147,7 +167,69 @@ export async function doSync(
     cachedAnnotations: mergedAnnotations.length,
     since: cardStart,
     exportedFiles,
+    briefPath,
   }
+}
+
+/** Collect a card's annotations (text + note). */
+function cardAnnotationLines(card: CuboxCard, annotations: CuboxAnnotation[]): string[] {
+  const lines: string[] = []
+  for (const a of annotations) {
+    if (a.text !== '') lines.push('高亮：' + a.text.trim().replace(/\s+/g, ' '))
+    if (a.note !== '') lines.push('笔记：' + a.note.trim().replace(/\s+/g, ' '))
+  }
+  return lines
+}
+
+/** Format today's cards into a plain text list for the LLM prompt. */
+export function formatCollectionForPrompt(cache: CuboxCache, date: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const isToday = (iso: string): boolean => {
+    const d = new Date(iso)
+    return !Number.isNaN(d.getTime()) &&
+      d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate()
+  }
+  const cards = cache.cards.filter((c) => isToday(c.create_time)).sort((a, b) => b.create_time.localeCompare(a.create_time))
+  if (cards.length === 0) return '（今天没有新收藏）'
+  const lines: string[] = []
+  for (const [index, card] of cards.entries()) {
+    const title = (card.title || card.article_title || card.url).trim()
+    const domain = (() => { try { return new URL(card.url).hostname.replace(/^www\./, '') } catch { return card.domain ?? '' } })()
+    const description = (card.description || '').trim()
+    const annotationText = cardAnnotationLines(card, cache.annotations)
+    lines.push((index + 1) + '. ' + title + '（来源：' + (domain || '未知') + '）')
+    if (description !== '') lines.push('   摘要：' + description)
+    if (annotationText.length > 0) {
+      lines.push('   标注：')
+      for (const a of annotationText.slice(0, 5)) lines.push('   - ' + a)
+    }
+  }
+  void pad
+  return lines.join('\n')
+}
+
+/** Generate the daily brief from the user's prompt and write it to the output dir. */
+export async function writeDailyBrief(
+  cache: CuboxCache,
+  outputDir: string,
+  llm: LlmConfig & { prompt: string },
+): Promise<string> {
+  const now = new Date()
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const dateKey = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
+  const collection = formatCollectionForPrompt(cache, now)
+  const user = llm.prompt.includes('{collection}')
+    ? llm.prompt.replaceAll('{collection}', collection)
+    : llm.prompt + '\n\n【今日收藏列表】\n' + collection
+  const content = await chatComplete(
+    { baseUrl: llm.baseUrl, apiKey: llm.apiKey, model: llm.model },
+    '你是一个信息整理助手。严格按用户的 prompt 要求输出，直接输出内容本身，不要任何引导语。',
+    user,
+  )
+  const filePath = path.join(outputDir, '今日收藏简报-' + dateKey + '.md')
+  await mkdir(outputDir, { recursive: true })
+  await writeFile(filePath, content + '\n')
+  return filePath
 }
 
 /** Local time in the Cubox API layout (no tz-aware dependency). */

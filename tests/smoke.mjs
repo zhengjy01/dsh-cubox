@@ -47,6 +47,7 @@ console.log('\n[store]')
   const store = new CuboxStore()
   const emptyView = await store.view()
   check('empty view not configured', emptyView.configured === false)
+  check('empty view defaults', emptyView.exportCards === true && emptyView.llmBaseUrl === 'https://api.deepseek.com/v1' && emptyView.llmModel === 'deepseek-chat' && emptyView.llmPrompt.includes('今日收藏简报'))
   const patched = await store.patch({ apiLink: 'https://cubox.cc/c/api/save/secret99xyz', syncMinutes: 30 })
   check('patch via apiLink', patched.configured === true && patched.server === 'cubox.cc' && patched.tokenMasked === 'secr****9xyz' && patched.syncMinutes === 30)
   const view = await store.view()
@@ -55,6 +56,8 @@ console.log('\n[store]')
   check('reset clears', reset.configured === false && reset.syncMinutes === 30)
   const bare = await store.patch({ token: 'tok12345', server: 'cubox.pro' })
   check('patch bare token/server', bare.configured === true && bare.server === 'cubox.pro')
+  const llm = await store.patch({ exportCards: false, llmApiKey: 'sk-abc12345', llmModel: 'deepseek-chat', llmPrompt: '请总结：{collection}' })
+  check('patch llm + exportCards', llm.exportCards === false && llm.llmKeyMasked === 'sk-a****2345' && llm.llmPrompt.includes('{collection}'))
 }
 
 // ----------------------------------------------------------------- api
@@ -138,6 +141,53 @@ console.log('\n[sync]')
   const cardFile = names.find((n) => n.includes('AI 文章'))
   const cardContent = await fsMod.readFile(path.join(exportDir, cardFile), 'utf8')
   check('card frontmatter + links', cardContent.includes('cubox_url: https://cubox.pro/web/card/c1') && cardContent.includes('[Read Original](') && cardContent.includes('## 标注') && cardContent.includes('关键段落'), '')
+
+  // Collection formatting + LLM brief (stubbed fetch).
+  const { formatCollectionForPrompt, writeDailyBrief } = mod
+  const formatted = formatCollectionForPrompt(reloaded, new Date())
+  check('format collection', formatted.includes('AI 文章') && formatted.includes('来源：a.com') && formatted.includes('摘要：讲 LLM') && formatted.includes('高亮：关键段落'), formatted)
+  const llmCalls = []
+  const llmStub = async (input, init) => {
+    llmCalls.push(JSON.parse(init.body))
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: '今日简报正文' } }] }),
+      json: async () => ({ choices: [{ message: { content: '今日简报正文' } }] }),
+    }
+  }
+  const origFetch = globalThis.fetch
+  globalThis.fetch = llmStub
+  try {
+    const briefPath = await writeDailyBrief(reloaded, exportDir, {
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'sk-test',
+      model: 'deepseek-chat',
+      prompt: '请生成简报：\n{collection}',
+    })
+    check('brief written', typeof briefPath === 'string' && briefPath.includes('今日收藏简报-'))
+    check('brief content', (await fsMod.readFile(briefPath, 'utf8')).includes('今日简报正文'))
+    check('llm called with collection', llmCalls.length === 1 && llmCalls[0].messages[1].content.includes('AI 文章'))
+  } finally {
+    globalThis.fetch = origFetch
+  }
+
+  // doSync with exportCards=false and LLM configured (stubbed) writes only the brief.
+  await store.patch({ exportCards: false, llmApiKey: 'sk-test', llmBaseUrl: 'https://api.deepseek.com/v1', llmModel: 'deepseek-chat', llmPrompt: '简报：{collection}', outputDir: exportDir })
+  const llmCalls2 = []
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('deepseek')) {
+      llmCalls2.push(JSON.parse(init.body))
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'AI 简报正文' } }] }), json: async () => ({ choices: [{ message: { content: 'AI 简报正文' } }] }) }
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify({ code: 200, message: 'ok', data: [] }), json: async () => ({ code: 200, message: 'ok', data: [] }) }
+  }
+  try {
+    const result2 = await doSync(api, store, { days: 1, limit: 10 })
+    check('doSync brief only (no cards)', result2.ok === true && result2.exportedFiles === 0 && result2.briefPath !== '' && llmCalls2.length === 1, result2.message)
+  } finally {
+    globalThis.fetch = origFetch
+  }
 }
 
 // ------------------------------------------------------------- apply

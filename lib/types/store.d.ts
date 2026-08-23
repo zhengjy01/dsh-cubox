@@ -31,7 +31,19 @@ export interface CuboxCredentials {
     lastSyncAt: string;
     /** Local directory for markdown export on sync ('' = no export). */
     outputDir: string;
+    /** Whether to write one markdown file per card on sync (default true). */
+    exportCards: boolean;
+    /** LLM base URL (OpenAI-compatible). */
+    llmBaseUrl: string;
+    /** LLM API key. */
+    llmApiKey: string;
+    /** LLM model name. */
+    llmModel: string;
+    /** Prompt template for the daily brief; {collection} is replaced with the formatted collection. */
+    llmPrompt: string;
 }
+/** Default prompt for the daily collection brief. */
+export declare const DEFAULT_LLM_PROMPT: string;
 /** Public, secret-free status view. */
 export interface CuboxConfigView {
     configured: boolean;
@@ -40,6 +52,11 @@ export interface CuboxConfigView {
     syncMinutes: number;
     lastSyncAt: string;
     outputDir: string;
+    exportCards: boolean;
+    llmBaseUrl: string;
+    llmModel: string;
+    llmKeyMasked: string;
+    llmPrompt: string;
     configPath: string;
 }
 /** Mask a credential for display, keeping only the head and tail. */
@@ -66,7 +83,8 @@ export declare class CuboxStore {
     view(): Promise<CuboxConfigView>;
     /**
      * Apply a config patch: apiLink (parse into server+token) / server / token
-     * / syncMinutes / outputDir replace, reset clears. Returns the public view.
+     * / syncMinutes / outputDir / exportCards / LLM fields replace, reset clears.
+     * Returns the public view.
      */
     patch(args: Record<string, unknown> | undefined): Promise<CuboxConfigView>;
 }

@@ -35,9 +35,10 @@ export interface Config {
  */
 export declare function apply(ctx: Context, config?: Config): void;
 /** Re-exports for host consumers and the smoke tests. */
-export { CuboxStore, mask, parseApiLink, configPath, cachePath, type CuboxConfigView, type CuboxCredentials } from './store.ts';
+export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, type CuboxConfigView, type CuboxCredentials } from './store.ts';
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts';
 export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, buildTools, type ToolContext } from './tools.ts';
-export { doSync, readCache, writeCache, exportSyncToMarkdown, type CuboxCache, type SyncResult } from './sync.ts';
+export { doSync, readCache, writeCache, exportSyncToMarkdown, formatCollectionForPrompt, writeDailyBrief, type CuboxCache, type SyncResult } from './sync.ts';
+export { chatComplete, llmConfigured, type LlmConfig } from './llm.ts';
 export { makeRoutes, CUBOX_API, type NativeDirectoryPicker } from './routes.ts';
 export { defineTool };

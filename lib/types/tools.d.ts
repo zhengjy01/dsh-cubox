@@ -15,7 +15,7 @@ export interface ToolContext {
 }
 /** Status tool: configuration + latest sync snapshot summary. */
 export declare function cuboxStatusTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
-/** Config tool: set/clear the API link, server, token, sync interval. */
+/** Config tool: set/clear the API link, server, token, sync interval, export + AI options. */
 export declare function cuboxConfigTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
 /** Sync tool: pull the latest collection snapshot into the local cache. */
 export declare function cuboxSyncTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
