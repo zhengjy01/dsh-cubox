@@ -49,6 +49,8 @@ export interface CuboxCredentials {
   syncMinutes: number
   /** ISO timestamp of the last successful sync. */
   lastSyncAt: string
+  /** Local directory for markdown export on sync ('' = no export). */
+  outputDir: string
 }
 
 /** Public, secret-free status view. */
@@ -58,6 +60,7 @@ export interface CuboxConfigView {
   tokenMasked: string
   syncMinutes: number
   lastSyncAt: string
+  outputDir: string
   configPath: string
 }
 
@@ -98,7 +101,7 @@ function lastSegment(pathname: string): string {
 
 /** Empty credentials record. */
 function empty(): CuboxCredentials {
-  return { server: 'cubox.pro', token: '', syncMinutes: 60, lastSyncAt: '' }
+  return { server: 'cubox.pro', token: '', syncMinutes: 60, lastSyncAt: '', outputDir: '' }
 }
 
 /** Parse an unknown JSON record into credentials (tolerates missing keys). */
@@ -112,6 +115,7 @@ function parse(raw: unknown): CuboxCredentials {
     token: str(record.token),
     syncMinutes: num(record.syncMinutes),
     lastSyncAt: str(record.lastSyncAt),
+    outputDir: str(record.outputDir),
   }
 }
 
@@ -150,13 +154,14 @@ export class CuboxStore {
       tokenMasked: cfg.token.trim() !== '' ? mask(cfg.token) : '',
       syncMinutes: cfg.syncMinutes,
       lastSyncAt: cfg.lastSyncAt,
+      outputDir: cfg.outputDir,
       configPath: configPath(),
     }
   }
 
   /**
    * Apply a config patch: apiLink (parse into server+token) / server / token
-   * / syncMinutes replace, reset clears. Returns the public view.
+   * / syncMinutes / outputDir replace, reset clears. Returns the public view.
    */
   async patch(args: Record<string, unknown> | undefined): Promise<CuboxConfigView> {
     const cfg = await this.load()
@@ -178,6 +183,7 @@ export class CuboxStore {
     if (args !== undefined && typeof args.syncMinutes === 'number' && Number.isFinite(args.syncMinutes)) {
       next.syncMinutes = Math.max(0, Math.floor(args.syncMinutes))
     }
+    if (args !== undefined && typeof args.outputDir === 'string') next.outputDir = args.outputDir.trim()
     await this.save(next)
     return this.view()
   }

@@ -32,6 +32,8 @@ export interface SyncResult {
   cachedCards: number
   cachedAnnotations: number
   since: string
+  /** Number of markdown files written to the output dir (0 = none). */
+  exportedFiles: number
 }
 
 /** Parse the cache file (missing/unreadable → empty). */
@@ -66,7 +68,7 @@ export async function writeCache(cache: CuboxCache): Promise<void> {
 export async function doSync(
   api: CuboxApi,
   store: CuboxStore,
-  opts: { days?: number; limit?: number } = {},
+  opts: { days?: number; limit?: number; outputDir?: string } = {},
 ): Promise<SyncResult> {
   const days = typeof opts.days === 'number' && opts.days > 0 ? Math.floor(opts.days) : 1
   const limit = typeof opts.limit === 'number' && opts.limit > 0 ? Math.floor(opts.limit) : 200
@@ -111,9 +113,16 @@ export async function doSync(
   await writeCache(cache)
   await store.save({ ...(await store.load()), lastSyncAt: cache.updatedAt })
 
+  // Markdown export to the configured output dir ('' = disabled).
+  const outputDir = typeof opts.outputDir === 'string' ? opts.outputDir : (await store.load()).outputDir
+  const exportedFiles = outputDir.trim() !== ''
+    ? await exportSyncToMarkdown(cache, outputDir.trim())
+    : 0
+
   const message =
     '同步完成：拉取卡片 ' + cards.length + ' 条、标注 ' + annotations.length + ' 条；' +
-    '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。'
+    '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。' +
+    (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个 Markdown 文件到 ' + outputDir.trim() : '')
   return {
     ok: true,
     message,
@@ -122,6 +131,7 @@ export async function doSync(
     cachedCards: mergedCards.length,
     cachedAnnotations: mergedAnnotations.length,
     since: cardStart,
+    exportedFiles,
   }
 }
 
@@ -241,4 +251,93 @@ export function buildAnnotationsSummary(
     lines.push('')
   }
   return lines.join('\n')
+}
+
+/**
+ * Write one markdown file per card plus a daily outline into the output
+ * directory. Card files mirror the official Cubox Obsidian plugin layout
+ * (frontmatter with id/cubox_url/url/tags + title + description + links +
+ * annotations). Returns the number of files written.
+ */
+export async function exportSyncToMarkdown(cache: CuboxCache, outputDir: string): Promise<number> {
+  await mkdir(outputDir, { recursive: true })
+  const today = new Date()
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  const todayKey = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate())
+
+  let written = 0
+  // One file per card (only today's cards — older ones already exported).
+  for (const card of cache.cards) {
+    const created = new Date(card.create_time)
+    if (Number.isNaN(created.getTime())) continue
+    if (created.getFullYear() !== today.getFullYear() || created.getMonth() !== today.getMonth() || created.getDate() !== today.getDate()) continue
+
+    const title = (card.title || card.article_title || '未命名收藏').trim()
+    const safeName = sanitizeFilename(title)
+    const dateKey = created.getFullYear() + '-' + pad(created.getMonth() + 1) + '-' + pad(created.getDate())
+    const filePath = path.join(outputDir, safeName + '-' + dateKey + '.md')
+    const cardAnnotations = cache.annotations.filter((a) => a.card_id === card.id)
+
+    const parts: string[] = []
+    parts.push('---')
+    parts.push('id: "' + card.id + '"')
+    parts.push('cubox_url: https://cubox.pro/web/card/' + card.id)
+    if (card.url !== '') parts.push('url: ' + card.url)
+    const tags = Array.isArray(card.tags) && card.tags.length > 0 ? card.tags : []
+    parts.push('tags: [' + tags.join(', ') + ']')
+    parts.push('---')
+    parts.push('')
+    parts.push('# ' + title)
+    parts.push('')
+    if (card.description !== '') {
+      parts.push(card.description.trim())
+      parts.push('')
+    }
+    if (card.url !== '') {
+      parts.push('[Read in Cubox](https://cubox.pro/web/card/' + card.id + ')  ')
+      parts.push('[Read Original](' + card.url + ')  ')
+      parts.push('')
+      parts.push('---')
+      parts.push('')
+    }
+    if (cardAnnotations.length > 0) {
+      parts.push('## 标注')
+      parts.push('')
+      for (const a of cardAnnotations) {
+        if (a.text !== '') parts.push('- > ' + a.text.trim().replace(/\n/g, ' '))
+        if (a.note !== '') parts.push('  - 笔记：' + a.note.trim().replace(/\n/g, ' '))
+        if (a.color !== '') parts.push('  - 颜色：' + a.color)
+      }
+      parts.push('')
+    }
+    await writeFile(filePath, parts.join('\n'))
+    written += 1
+  }
+
+  // Daily outline file.
+  const outlineCards = cache.cards.filter((c) => {
+    const d = new Date(c.create_time)
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  })
+  const outlineAnnotations = cache.annotations.filter((a) => {
+    const d = new Date(a.create_time)
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  })
+  if (outlineCards.length > 0 || outlineAnnotations.length > 0) {
+    const outline = buildDailyOutline(outlineCards, outlineAnnotations, todayKey)
+    const outlinePath = path.join(outputDir, '收藏总结-' + todayKey + '.md')
+    await writeFile(outlinePath, outline + '\n')
+    written += 1
+  }
+
+  return written
+}
+
+/** Strip characters that are illegal in filenames; cap the length. */
+function sanitizeFilename(name: string): string {
+  const cleaned = name
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned === '' ? '未命名收藏' : cleaned.slice(0, 80)
 }

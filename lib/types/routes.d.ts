@@ -8,20 +8,35 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CuboxStore } from './store.ts';
 import type { CuboxApi } from './api.ts';
+/** Minimal host directory-picker seam (duck-typed; native = OS folder chooser). */
+export interface NativeDirectoryPicker {
+    capability(): {
+        kind: 'native';
+        pick(signal: AbortSignal): Promise<string | null>;
+    } | {
+        kind: 'browse';
+    };
+}
 /** Route paths. */
 export declare const CUBOX_API: {
     readonly config: "/api/dsh-cubox/config";
     readonly sync: "/api/dsh-cubox/sync";
     readonly status: "/api/dsh-cubox/status";
+    readonly pickDir: "/api/dsh-cubox/pick-dir";
 };
 /** Route handler context. */
 export interface RouteContext {
     store: CuboxStore;
     api: CuboxApi;
+    /**
+     * Lazily resolve the host directory picker at request time (by then every
+     * plugin is loaded, so the picker service is guaranteed registered).
+     */
+    getPicker?: () => NativeDirectoryPicker | undefined;
 }
 /**
  * Build every /api/dsh-cubox route (exact paths).
- * @param deps - store and api client.
+ * @param deps - store, api client, and optional picker resolver.
  * @returns the route list.
  */
 export declare function makeRoutes(deps: RouteContext): ({
@@ -35,5 +50,9 @@ export declare function makeRoutes(deps: RouteContext): ({
 } | {
     kind: "exact";
     path: "/api/dsh-cubox/sync";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+} | {
+    kind: "exact";
+    path: "/api/dsh-cubox/pick-dir";
     handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 })[];

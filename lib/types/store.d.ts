@@ -29,6 +29,8 @@ export interface CuboxCredentials {
     syncMinutes: number;
     /** ISO timestamp of the last successful sync. */
     lastSyncAt: string;
+    /** Local directory for markdown export on sync ('' = no export). */
+    outputDir: string;
 }
 /** Public, secret-free status view. */
 export interface CuboxConfigView {
@@ -37,6 +39,7 @@ export interface CuboxConfigView {
     tokenMasked: string;
     syncMinutes: number;
     lastSyncAt: string;
+    outputDir: string;
     configPath: string;
 }
 /** Mask a credential for display, keeping only the head and tail. */
@@ -63,7 +66,7 @@ export declare class CuboxStore {
     view(): Promise<CuboxConfigView>;
     /**
      * Apply a config patch: apiLink (parse into server+token) / server / token
-     * / syncMinutes replace, reset clears. Returns the public view.
+     * / syncMinutes / outputDir replace, reset clears. Returns the public view.
      */
     patch(args: Record<string, unknown> | undefined): Promise<CuboxConfigView>;
 }

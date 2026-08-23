@@ -9,6 +9,7 @@ export interface CuboxConfigView {
     tokenMasked: string;
     syncMinutes: number;
     lastSyncAt: string;
+    outputDir: string;
     configPath: string;
 }
 /** Status view with cache stats. */
@@ -25,6 +26,7 @@ export interface CuboxSyncResult {
     pulledAnnotations: number;
     cachedCards: number;
     cachedAnnotations: number;
+    exportedFiles: number;
 }
 /** Error carrying the route's JSON error message. */
 export declare class CuboxApiError extends Error {
@@ -36,4 +38,12 @@ export declare class CuboxApi {
     setConfig(patch: Record<string, unknown>): Promise<CuboxConfigView>;
     getStatus(): Promise<CuboxStatusView>;
     sync(days?: number): Promise<CuboxSyncResult>;
+    /** Open the host OS folder chooser; resolves with the picked path. */
+    pickDir(): Promise<{
+        ok: boolean;
+        path?: string;
+        cancelled?: boolean;
+        unsupported?: boolean;
+        message?: string;
+    }>;
 }

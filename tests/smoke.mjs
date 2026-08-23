@@ -134,6 +134,18 @@ console.log('\n[sync]')
   check('doSync ok', result.ok === true && result.pulledCards === 0)
   const viewAfter = await store.view()
   check('doSync stamps lastSyncAt', viewAfter.lastSyncAt !== '')
+
+  // Markdown export to an output dir.
+  const exportDir = path.join(tmp, 'export')
+  const { exportSyncToMarkdown } = mod
+  const written = await exportSyncToMarkdown(reloaded, exportDir)
+  check('export writes card + outline', written === 2, 'written=' + written)
+  const fsMod = await import('node:fs/promises')
+  const names = (await fsMod.readdir(exportDir)).sort()
+  check('export filenames', names.some((n) => n.includes('AI 文章')) && names.some((n) => n.startsWith('收藏总结-')), names.join(', '))
+  const cardFile = names.find((n) => n.includes('AI 文章'))
+  const cardContent = await fsMod.readFile(path.join(exportDir, cardFile), 'utf8')
+  check('card frontmatter + links', cardContent.includes('cubox_url: https://cubox.pro/web/card/c1') && cardContent.includes('[Read Original](') && cardContent.includes('## 标注') && cardContent.includes('关键段落'), '')
 }
 
 // ------------------------------------------------------------- apply
@@ -153,7 +165,7 @@ console.log('\n[apply]')
   const tools = ['cubox_status', 'cubox_config', 'cubox_sync', 'cubox_today', 'cubox_annotations', 'cubox_cards']
   for (const name of tools) check('tool registered: ' + name, registered.includes(name))
   check('section registered', registered.includes('section:plugin:dsh-cubox'))
-  check('routes registered', registered.includes('route:/api/dsh-cubox/config') && registered.includes('route:/api/dsh-cubox/sync'))
+  check('routes registered', registered.includes('route:/api/dsh-cubox/config') && registered.includes('route:/api/dsh-cubox/sync') && registered.includes('route:/api/dsh-cubox/pick-dir'))
 
   // Timer branch: syncMinutes > 0 schedules (interval called with ms).
   let intervalMs = null

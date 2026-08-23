@@ -10,6 +10,7 @@ export interface CuboxConfigView {
   tokenMasked: string
   syncMinutes: number
   lastSyncAt: string
+  outputDir: string
   configPath: string
 }
 
@@ -28,6 +29,7 @@ export interface CuboxSyncResult {
   pulledAnnotations: number
   cachedCards: number
   cachedAnnotations: number
+  exportedFiles: number
 }
 
 /** Error carrying the route's JSON error message. */
@@ -89,6 +91,13 @@ export class CuboxApi {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ days }),
+    })
+  }
+
+  /** Open the host OS folder chooser; resolves with the picked path. */
+  async pickDir(): Promise<{ ok: boolean; path?: string; cancelled?: boolean; unsupported?: boolean; message?: string }> {
+    return request<{ ok: boolean; path?: string; cancelled?: boolean; unsupported?: boolean; message?: string }>('/api/dsh-cubox/pick-dir', {
+      method: 'POST',
     })
   }
 }

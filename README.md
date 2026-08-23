@@ -7,11 +7,12 @@ Cubox sync for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harnes
 ## Features
 
 - **Scheduled sync** — a timer pulls your latest bookmarks into a local cache (`~/.dsh/dsh-cubox-cache.json`) every N minutes (default 60, configurable; 0 disables the timer). Manual sync anytime with `cubox_sync`.
+- **Markdown export** — set `outputDir` (via `cubox_config` or the settings panel) and every sync writes today's collection to that folder: one markdown file per card (frontmatter + title + description + Cubox/original links + annotations, same layout as the official Cubox Obsidian plugin) plus a daily outline file.
 - **Today's outline** — `cubox_today` renders a markdown outline of today's collection: overview stats, source distribution, then per-card title / source / link / description / tags / annotation snippets.
 - **Annotations & notes** — `cubox_annotations` aggregates highlights and notes across your collection (last N days, keyword filter), grouped by source card with highlight text, note, color, and time.
 - **Query** — `cubox_cards` filters by keyword, time window, annotated/starred/read status.
 - **Config & status** — `cubox_config` / `cubox_status`; credentials persist to `~/.dsh/dsh-cubox.json` (mode 0600), secrets never echoed.
-- **Settings panel** — Settings → Cubox: paste the API-extension link, set the sync interval, trigger manual syncs.
+- **Settings panel** — Settings → Cubox: paste the API-extension link, set the sync interval, pick the local export folder (OS folder chooser), trigger manual syncs.
 
 ## Install
 

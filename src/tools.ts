@@ -66,6 +66,7 @@ export function cuboxStatusTool(ctx: ToolContext) {
           tokenMasked: { type: 'string' },
           syncMinutes: { type: 'number' },
           lastSyncAt: { type: 'string' },
+          outputDir: { type: 'string' },
           configPath: { type: 'string' },
         },
       },
@@ -81,6 +82,7 @@ export function cuboxStatusTool(ctx: ToolContext) {
         '定时同步：' + (view.syncMinutes > 0 ? '每 ' + view.syncMinutes + ' 分钟' : '已关闭'),
         '最近同步：' + (view.lastSyncAt !== '' ? view.lastSyncAt : '从未同步'),
         '缓存：卡片 ' + cache.cards.length + ' 条、标注 ' + cache.annotations.length + ' 条',
+        '导出目录：' + (view.outputDir !== '' ? view.outputDir : '未设置（不同步到本地文件）'),
         '配置路径：' + view.configPath,
       ]
       return {
@@ -91,6 +93,7 @@ export function cuboxStatusTool(ctx: ToolContext) {
         tokenMasked: view.tokenMasked,
         syncMinutes: view.syncMinutes,
         lastSyncAt: view.lastSyncAt,
+        outputDir: view.outputDir,
         configPath: view.configPath,
       }
     },
@@ -101,12 +104,13 @@ export function cuboxStatusTool(ctx: ToolContext) {
 export function cuboxConfigTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_config',
-    description: '配置或清除 Cubox API 扩展凭据与定时同步间隔。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时）。reset: true 清除凭据。凭据持久化到 ~/.dsh/dsh-cubox.json（权限 0600）。',
+    description: '配置或清除 Cubox API 扩展凭据与定时同步间隔。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时）。outputDir 为本地导出目录（同步时把收藏写成 Markdown 文件；空=不导出）。reset: true 清除凭据。凭据持久化到 ~/.dsh/dsh-cubox.json（权限 0600）。',
     parameters: {
       apiLink: { type: 'string', description: '完整 API 扩展链接（https://cubox.pro/c/api/save/xxxx 或 https://cubox.cc/c/api/save/xxxx）' },
       server: { type: 'string', description: '服务器：cubox.pro（国内）或 cubox.cc（国际版）' },
       token: { type: 'string', description: 'API token（链接最后一段）' },
       syncMinutes: { type: 'number', description: '定时同步间隔（分钟），0 = 关闭定时' },
+      outputDir: { type: 'string', description: '本地导出目录（绝对路径；同步时写入 Markdown 文件，空=不导出）' },
       reset: { type: 'boolean', description: '设为 true 清除全部凭据' },
     },
     output: {
@@ -121,24 +125,26 @@ export function cuboxConfigTool(ctx: ToolContext) {
           tokenMasked: { type: 'string' },
           syncMinutes: { type: 'number' },
           lastSyncAt: { type: 'string' },
+          outputDir: { type: 'string' },
           configPath: { type: 'string' },
         },
       },
       render: (_args: unknown, value: Record<string, unknown>) => text(String(value.message ?? '')),
     },
-    async execute(args: { apiLink?: string; server?: string; token?: string; syncMinutes?: number; reset?: boolean }) {
+    async execute(args: { apiLink?: string; server?: string; token?: string; syncMinutes?: number; outputDir?: string; reset?: boolean }) {
       if (args !== undefined && args.reset === true) {
         const view = await ctx.store.patch({ reset: true })
-        return { ok: true, message: '已清除 Cubox 凭据。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, configPath: view.configPath }
+        return { ok: true, message: '已清除 Cubox 凭据。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, outputDir: view.outputDir, configPath: view.configPath }
       }
       const view = await ctx.store.patch(args)
       if (!view.configured) {
-        return { ok: false, message: '配置未生效：缺少 token。请提供完整的 API 扩展链接。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, configPath: view.configPath }
+        return { ok: false, message: '配置未生效：缺少 token。请提供完整的 API 扩展链接。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, outputDir: view.outputDir, configPath: view.configPath }
       }
       const parts = ['已保存 Cubox 配置：服务器 ' + view.server + '，token ' + view.tokenMasked]
       if (view.syncMinutes > 0) parts.push('定时同步每 ' + view.syncMinutes + ' 分钟一次')
       else parts.push('定时同步已关闭（可随时 cubox_sync 手动同步）')
-      return { ok: true, message: parts.join('；') + '。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, configPath: view.configPath }
+      if (view.outputDir !== '') parts.push('同步将导出 Markdown 到 ' + view.outputDir)
+      return { ok: true, message: parts.join('；') + '。', configured: view.configured, server: view.server, tokenMasked: view.tokenMasked, syncMinutes: view.syncMinutes, lastSyncAt: view.lastSyncAt, outputDir: view.outputDir, configPath: view.configPath }
     },
   })
 }
@@ -163,6 +169,7 @@ export function cuboxSyncTool(ctx: ToolContext) {
           pulledAnnotations: { type: 'number' },
           cachedCards: { type: 'number' },
           cachedAnnotations: { type: 'number' },
+          exportedFiles: { type: 'number' },
           since: { type: 'string' },
         },
       },
@@ -184,6 +191,7 @@ export function cuboxSyncTool(ctx: ToolContext) {
         pulledAnnotations: result.pulledAnnotations,
         cachedCards: result.cachedCards,
         cachedAnnotations: result.cachedAnnotations,
+        exportedFiles: result.exportedFiles,
         since: result.since,
       }
     },

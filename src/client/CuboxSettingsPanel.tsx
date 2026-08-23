@@ -70,7 +70,8 @@ function statusText(view: CuboxStatusView | null): string {
     '已配置 · 服务器 ' + view.server + ' · token ' + view.tokenMasked +
     ' · 定时同步每 ' + view.syncMinutes + ' 分钟' +
     ' · 最近同步 ' + (view.lastSyncAt !== '' ? view.lastSyncAt : '从未') +
-    ' · 缓存卡片 ' + view.cachedCards + ' 条 / 标注 ' + view.cachedAnnotations + ' 条'
+    ' · 缓存卡片 ' + view.cachedCards + ' 条 / 标注 ' + view.cachedAnnotations + ' 条' +
+    ' · 导出目录 ' + (view.outputDir !== '' ? view.outputDir : '未设置')
   )
 }
 
@@ -80,12 +81,15 @@ export function CuboxSettingsPanel(): JSX.Element {
   const [apiLink, setApiLink] = useState('')
   const [server, setServer] = useState('cubox.pro')
   const [syncMinutes, setSyncMinutes] = useState('60')
+  const [outputDir, setOutputDir] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
   const refresh = useCallback(async () => {
     try {
-      setView(await api.getStatus())
+      const next = await api.getStatus()
+      setView(next)
+      if (next.outputDir !== '') setOutputDir(next.outputDir)
     } catch (error) {
       setMessage('状态读取失败: ' + String(error instanceof Error ? error.message : error))
     }
@@ -99,7 +103,7 @@ export function CuboxSettingsPanel(): JSX.Element {
     setBusy(true)
     setMessage('')
     try {
-      const patch: Record<string, unknown> = { server, syncMinutes: Number(syncMinutes) || 0 }
+      const patch: Record<string, unknown> = { server, syncMinutes: Number(syncMinutes) || 0, outputDir: outputDir.trim() }
       if (apiLink.trim() !== '') patch.apiLink = apiLink.trim()
       const next = await api.setConfig(patch)
       setView({ ...next, cachedCards: view?.cachedCards ?? 0, cachedAnnotations: view?.cachedAnnotations ?? 0, cacheUpdatedAt: view?.cacheUpdatedAt ?? '' })
@@ -118,6 +122,7 @@ export function CuboxSettingsPanel(): JSX.Element {
     try {
       const next = await api.setConfig({ reset: true })
       setView({ ...next, cachedCards: 0, cachedAnnotations: 0, cacheUpdatedAt: '' })
+      setOutputDir('')
       setMessage('已清除配置。')
     } catch (error) {
       setMessage('清除失败: ' + String(error instanceof Error ? error.message : error))
@@ -135,6 +140,27 @@ export function CuboxSettingsPanel(): JSX.Element {
       await refresh()
     } catch (error) {
       setMessage('同步失败: ' + String(error instanceof Error ? error.message : error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Open the host OS folder chooser and apply the picked path. */
+  const pickFolder = async (): Promise<void> => {
+    setBusy(true)
+    setMessage('')
+    try {
+      const result = await api.pickDir()
+      if (result.ok && result.path !== undefined) {
+        setOutputDir(result.path)
+        setMessage('已选择文件夹：' + result.path + '（保存配置后生效）')
+      } else if (result.cancelled === true) {
+        setMessage('已取消选择。')
+      } else {
+        setMessage(result.message ?? '无法弹出文件夹选择（当前环境不支持），请手动输入路径。')
+      }
+    } catch (error) {
+      setMessage('选择文件夹失败: ' + String(error instanceof Error ? error.message : error))
     } finally {
       setBusy(false)
     }
@@ -168,6 +194,15 @@ export function CuboxSettingsPanel(): JSX.Element {
         <button style={s.button} onClick={() => void clearConfig()} disabled={busy}>清除</button>
       </div>
       <div style={s.row}>
+        <input
+          style={s.input}
+          placeholder="本地导出目录（同步时写入 Markdown，留空=不导出）"
+          value={outputDir}
+          onChange={(e) => setOutputDir(e.target.value)}
+        />
+        <button style={s.button} onClick={() => void pickFolder()} disabled={busy}>选择文件夹…</button>
+      </div>
+      <div style={s.row}>
         <button style={s.button} onClick={() => void runSync(1)} disabled={busy}>同步今天</button>
         <button style={s.button} onClick={() => void runSync(7)} disabled={busy}>同步最近 7 天</button>
       </div>
@@ -175,7 +210,8 @@ export function CuboxSettingsPanel(): JSX.Element {
       <div style={s.hint}>
         API 扩展链接获取：Cubox 偏好设置 → 扩展中心和自动化 → API 扩展 → 启用并复制链接。链接是个人身份凭证，请勿泄露。
         token 与同步快照分别存于 ~/.dsh/dsh-cubox.json 与 ~/.dsh/dsh-cubox-cache.json（权限 0600）。
-        同步后可用 cubox_today（今日总结大纲）与 cubox_annotations（笔记标注汇总）等工具。
+        配置导出目录后，每次同步会把今日收藏写成 Markdown（每卡片一个文件 + 每日总结大纲）到该目录。
+        同步后也可用 cubox_today（今日总结大纲）与 cubox_annotations（笔记标注汇总）等工具。
       </div>
     </div>
   )

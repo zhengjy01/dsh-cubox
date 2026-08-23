@@ -25,6 +25,8 @@ export interface SyncResult {
     cachedCards: number;
     cachedAnnotations: number;
     since: string;
+    /** Number of markdown files written to the output dir (0 = none). */
+    exportedFiles: number;
 }
 /** Parse the cache file (missing/unreadable → empty). */
 export declare function readCache(): Promise<CuboxCache>;
@@ -39,6 +41,7 @@ export declare function writeCache(cache: CuboxCache): Promise<void>;
 export declare function doSync(api: CuboxApi, store: CuboxStore, opts?: {
     days?: number;
     limit?: number;
+    outputDir?: string;
 }): Promise<SyncResult>;
 /** Domain of a card URL, or '' when unparsable. */
 export declare function cardDomain(card: CuboxCard): string;
@@ -53,3 +56,10 @@ export declare function buildDailyOutline(cards: CuboxCard[], annotations: Cubox
  * Each entry: source card, the annotation text and its note, color, time.
  */
 export declare function buildAnnotationsSummary(annotations: CuboxAnnotation[], cardTitleById: Map<string, string>): string;
+/**
+ * Write one markdown file per card plus a daily outline into the output
+ * directory. Card files mirror the official Cubox Obsidian plugin layout
+ * (frontmatter with id/cubox_url/url/tags + title + description + links +
+ * annotations). Returns the number of files written.
+ */
+export declare function exportSyncToMarkdown(cache: CuboxCache, outputDir: string): Promise<number>;
