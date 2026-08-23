@@ -2,15 +2,16 @@
 
 > **English** | [**中文**](README.zh.md)
 
-Cubox sync for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): scheduled sync of your Cubox collection into a local cache and markdown files (one per card, with annotations) — via the same `/c/api/cli` endpoints the official cubox-cli uses. Agent tools plus a web settings panel.
+Cubox sync for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): scheduled sync of your Cubox collection, with an **AI daily brief** generated from your own prompt template and written straight into Obsidian — via the same `/c/api/cli` endpoints the official cubox-cli uses. Agent tools plus a web settings panel.
 
 ## Features
 
 - **Scheduled sync** — a timer pulls your latest bookmarks into a local cache (`~/.dsh/dsh-cubox-cache.json`) every N minutes (default 60, configurable; 0 disables the timer). Manual sync anytime with `cubox_sync`.
-- **Markdown export** — set `outputDir` (via `cubox_config` or the settings panel) and every sync writes today's collection to that folder: one markdown file per card (frontmatter + title + description + Cubox/original links + annotations, same layout as the official Cubox Obsidian plugin).
+- **AI daily brief** — write your own prompt template (e.g. "今日收藏简报", `{collection}` is replaced with today's formatted collection: title / source / summary / annotations). When an LLM key is configured, every sync generates `今日收藏简报-YYYY-MM-DD.md` into the output dir.
+- **Markdown export** — set `outputDir` and optionally keep one markdown file per card (frontmatter + title + description + Cubox/original links + annotations, same layout as the official Cubox Obsidian plugin). Toggle `exportCards` off to write only the AI brief.
 - **Query** — `cubox_cards` filters by keyword, time window, annotated/starred/read status.
 - **Config & status** — `cubox_config` / `cubox_status`; credentials persist to `~/.dsh/dsh-cubox.json` (mode 0600), secrets never echoed.
-- **Settings panel** — Settings → Cubox: paste the API-extension link, set the sync interval, pick the local export folder (OS folder chooser), trigger manual syncs.
+- **Settings panel** — Settings → Cubox: paste the API-extension link, set the sync interval, pick the local export folder (OS folder chooser), toggle per-card export, edit the AI brief prompt and LLM settings (OpenAI-compatible, defaults to DeepSeek).
 
 ## Install
 
@@ -34,6 +35,7 @@ Restart `dsh web`. The plugin ships pre-built — `lib/index.js` is plain ESM.
    ```
 
    The agent calls `cubox_config` to persist it. `cubox.pro` is the default server; `cubox.cc` is the international instance (auto-detected from the link).
+3. (Optional) Set the export dir + AI brief: choose the local folder, paste an OpenAI-compatible API key (DeepSeek by default), and edit the prompt template. `{collection}` is replaced with today's collection list.
 
 Then:
 
@@ -42,15 +44,15 @@ Then:
 查一下收藏里关于 LLM 的文章       → cubox_cards (keyword="LLM")
 ```
 
-> The API link is your personal identity credential — anyone holding it can read (and modify) your Cubox data. It is stored in `~/.dsh/dsh-cubox.json` (mode 0600). To rotate, click refresh in the Cubox API-extension page, then re-configure.
+> The API link and the LLM key are credentials — anyone holding them can read (and modify) your Cubox data or spend your LLM quota. They are stored in `~/.dsh/dsh-cubox.json` (mode 0600). To rotate, refresh in the Cubox API-extension page, then re-configure.
 
 ## Tools
 
 | Tool | Purpose |
 | --- | --- |
 | `cubox_status` | Connection & cache status |
-| `cubox_config` | Set / clear `apiLink`, `server`, `token`, `syncMinutes`, `outputDir` |
-| `cubox_sync` | Pull the last N days (default today) into the local cache + export markdown |
+| `cubox_config` | Set / clear `apiLink`, `server`, `token`, `syncMinutes`, `outputDir`, `exportCards`, `llmBaseUrl`, `llmApiKey`, `llmModel`, `llmPrompt` |
+| `cubox_sync` | Pull the last N days (default today) into the local cache + export markdown + AI brief |
 | `cubox_cards` | Query the collection (keyword / days / annotated / starred / read) |
 
 ## Notes
