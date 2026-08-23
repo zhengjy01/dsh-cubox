@@ -157,8 +157,12 @@ export function makeRoutes(deps: RouteContext) {
         }
         const body = await readJsonBody(req)
         const days = typeof body?.days === 'number' && body.days > 0 ? body.days : 1
-        const result = await doSync(api, store, { days, limit: 200 })
-        writeJson(res, 200, result)
+        try {
+          const result = await doSync(api, store, { days, limit: 200 })
+          writeJson(res, 200, result)
+        } catch (error) {
+          writeJson(res, 200, { ok: false, message: '同步失败：' + String(error instanceof Error ? error.message : error) })
+        }
       },
     },
     {

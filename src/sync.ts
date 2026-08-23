@@ -80,12 +80,20 @@ export async function doSync(
   // Card window: from start-of-window to end-of-today.
   const cardStart = formatLocal(start)
   const cardEnd = formatLocal(now)
+  const warnings: string[] = []
   let cards: CuboxCard[] = []
   try {
     cards = await api.filterCards({ start_time: cardStart, end_time: cardEnd, limit })
-  } catch {
+  } catch (cardError) {
     // Fall back to a plain latest-card pull when the time filter is rejected.
-    cards = await api.filterCards({ limit })
+    try {
+      cards = await api.filterCards({ limit })
+    } catch (fallbackError) {
+      warnings.push('拉取收藏失败：' + String(fallbackError instanceof Error ? fallbackError.message : fallbackError))
+    }
+    if (warnings.length === 0) {
+      warnings.push('时间过滤被拒绝，已退回拉取最新收藏：' + String(cardError instanceof Error ? cardError.message : cardError))
+    }
   }
 
   // Annotation window: today's full range.
@@ -93,8 +101,8 @@ export async function doSync(
   let annotations: CuboxAnnotation[] = []
   try {
     annotations = await api.filterAnnotations({ start_time: range.start, end_time: range.end, limit: 500 })
-  } catch {
-    annotations = []
+  } catch (annotationError) {
+    warnings.push('拉取标注失败（已忽略）：' + String(annotationError instanceof Error ? annotationError.message : annotationError))
   }
 
   // Merge into the existing cache (dedupe by id, newest first).
@@ -113,16 +121,23 @@ export async function doSync(
   await writeCache(cache)
   await store.save({ ...(await store.load()), lastSyncAt: cache.updatedAt })
 
-  // Markdown export to the configured output dir ('' = disabled).
+  // Markdown export to the configured output dir ('' = disabled). Export
+  // failures degrade gracefully — the snapshot is already saved.
   const outputDir = typeof opts.outputDir === 'string' ? opts.outputDir : (await store.load()).outputDir
-  const exportedFiles = outputDir.trim() !== ''
-    ? await exportSyncToMarkdown(cache, outputDir.trim())
-    : 0
+  let exportedFiles = 0
+  if (outputDir.trim() !== '') {
+    try {
+      exportedFiles = await exportSyncToMarkdown(cache, outputDir.trim())
+    } catch (exportError) {
+      warnings.push('导出 Markdown 失败：' + String(exportError instanceof Error ? exportError.message : exportError))
+    }
+  }
 
   const message =
     '同步完成：拉取卡片 ' + cards.length + ' 条、标注 ' + annotations.length + ' 条；' +
     '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。' +
-    (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个 Markdown 文件到 ' + outputDir.trim() : '')
+    (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个 Markdown 文件到 ' + outputDir.trim() : '') +
+    (warnings.length > 0 ? '\n警告：' + warnings.join('；') : '')
   return {
     ok: true,
     message,
