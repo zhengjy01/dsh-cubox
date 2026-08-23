@@ -7,7 +7,7 @@ Cubox sync for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harnes
 ## Features
 
 - **Scheduled sync** — a timer pulls your latest bookmarks into a local cache (`~/.dsh/dsh-cubox-cache.json`) every N minutes (default 60, configurable; 0 disables the timer). Manual sync anytime with `cubox_sync`.
-- **AI daily brief** — write your own prompt template (e.g. "今日收藏简报", `{collection}` is replaced with today's formatted collection: title / source / summary / annotations). When an LLM key is configured, every sync generates `今日收藏简报-YYYY-MM-DD.md` into the output dir.
+- **AI daily brief** — write your own prompt template (e.g. "今日收藏简报", `{collection}` is replaced with the formatted collection for the sync window: title / source / summary / annotations). When an LLM key is configured, every sync generates a brief into the output dir — `今日收藏简报-YYYY-MM-DD.md` for a 1-day sync, `最近N日收藏简报-YYYY-MM-DD.md` for wider windows (each window gets its own file).
 - **Markdown export** — set `outputDir` and optionally keep one markdown file per card (frontmatter + title + description + Cubox/original links + annotations, same layout as the official Cubox Obsidian plugin). Toggle `exportCards` off to write only the AI brief.
 - **Query** — `cubox_cards` filters by keyword, time window, annotated/starred/read status.
 - **Config & status** — `cubox_config` / `cubox_status`; credentials persist to `~/.dsh/dsh-cubox.json` (mode 0600), secrets never echoed.

@@ -7,7 +7,7 @@ DeepSeek Harness 的 [Cubox](https://cubox.pro)（收藏阅读工具）同步插
 ## 功能
 
 - **定时同步** — 定时器每隔 N 分钟（默认 60，可配置，0=关闭）自动拉取最新收藏并写入本地缓存（`~/.dsh/dsh-cubox-cache.json`）；也可随时 `cubox_sync` 手动同步。
-- **AI 每日简报** — 填写你自己的 prompt 模板（如「今日收藏简报」，`{collection}` 会被替换为今日收藏列表：标题 / 来源 / 摘要 / 标注）。配置 LLM key 后，每次同步生成 `今日收藏简报-YYYY-MM-DD.md` 到导出目录。
+- **AI 每日简报** — 填写你自己的 prompt 模板（如「今日收藏简报」，`{collection}` 会被替换为**同步窗口内**的收藏列表：标题 / 来源 / 摘要 / 标注）。配置 LLM key 后，每次同步按窗口生成简报到导出目录：1 天 → `今日收藏简报-YYYY-MM-DD.md`；多天（如 7 天）→ `最近N日收藏简报-YYYY-MM-DD.md`，**每个窗口独立文件，不互相覆盖**。
 - **Markdown 导出** — 配置 `outputDir` 后，可勾选「每张收藏一个 md 文件」（frontmatter + 标题 + 描述 + Cubox/原文链接 + 标注，与官方 Cubox Obsidian 插件同款格式）；**取消勾选则只写 AI 简报**，Obsidian 顶部不会堆卡片。
 - **查询** — `cubox_cards` 按关键词、时间窗口、是否已标注 / 星标 / 已读过滤。
 - **配置与状态** — `cubox_config` / `cubox_status`；凭据持久化到 `~/.dsh/dsh-cubox.json`（权限 0600），不回显密钥。
