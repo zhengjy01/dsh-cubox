@@ -107,6 +107,13 @@ export declare function parseApiLink(input: string): {
  */
 export declare class CuboxStore {
     config: CuboxCredentials | null;
+    /**
+     * Optional observer fired after every successful save — from the settings
+     * panel POST, the cubox_config tool, or the lastSyncAt stamp in doSync.
+     * The host uses it to re-arm the scheduled-sync timer when the interval
+     * changes at runtime, so a panel edit applies without a `dsh web` restart.
+     */
+    onSaved?: (config: CuboxCredentials) => void;
     load(): Promise<CuboxCredentials>;
     save(next: CuboxCredentials): Promise<void>;
     /** Public, secret-free view. */

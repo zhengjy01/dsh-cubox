@@ -125,15 +125,19 @@ export function apply(ctx: Context, config?: Config): void {
     // Scheduled sync: interval in minutes (0 = disabled). The first tick
     // runs after the interval elapses; tools still allow manual sync anytime.
     // The panel-editable store value (syncMinutes) wins once the config file
-    // is loaded; the bundle config value arms the timer immediately.
+    // is loaded; the bundle config value arms the timer immediately. A later
+    // panel/tool save re-arms it through store.onSaved (no restart needed).
     const configuredMinutes = typeof config?.syncMinutes === 'number' && config.syncMinutes >= 0
       ? Math.floor(config.syncMinutes)
       : 60
+    /** Minutes the timer is currently armed with (-1 = none). */
+    let armedMinutes = -1
     const armTimer = (minutes: number): void => {
       if (disposeTimer !== undefined) {
         disposeTimer()
         disposeTimer = undefined
       }
+      armedMinutes = minutes
       if (minutes <= 0) return
       disposeTimer = ctx.interval(() => {
         void (async () => {
@@ -148,12 +152,18 @@ export function apply(ctx: Context, config?: Config): void {
         })()
       }, minutes * 60 * 1000)
     }
+    // Re-arm whenever the interval is saved (settings panel POST, cubox_config
+    // tool). doSync also saves (lastSyncAt) but never changes syncMinutes, so
+    // this is a no-op there.
+    store.onSaved = (cfg) => {
+      if (cfg.syncMinutes !== armedMinutes) armTimer(cfg.syncMinutes)
+    }
     timerGeneration += 1
     const generation = timerGeneration
     armTimer(configuredMinutes)
     void store.load().then((cfg) => {
       if (generation !== timerGeneration) return
-      if (cfg.syncMinutes !== configuredMinutes) armTimer(cfg.syncMinutes)
+      if (cfg.syncMinutes !== armedMinutes) armTimer(cfg.syncMinutes)
     }).catch(() => { /* keep the bundle-config interval */ })
   }
 

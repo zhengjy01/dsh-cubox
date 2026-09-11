@@ -228,6 +228,14 @@ function parse(raw: unknown): CuboxCredentials {
 export class CuboxStore {
   config: CuboxCredentials | null = null
 
+  /**
+   * Optional observer fired after every successful save — from the settings
+   * panel POST, the cubox_config tool, or the lastSyncAt stamp in doSync.
+   * The host uses it to re-arm the scheduled-sync timer when the interval
+   * changes at runtime, so a panel edit applies without a `dsh web` restart.
+   */
+  onSaved?: (config: CuboxCredentials) => void
+
   async load(): Promise<CuboxCredentials> {
     if (this.config !== null) return this.config
     try {
@@ -244,6 +252,7 @@ export class CuboxStore {
     this.config = next
     await mkdir(path.dirname(configPath()), { recursive: true })
     await writeFile(configPath(), JSON.stringify(next, null, 2), { mode: 0o600 })
+    this.onSaved?.(next)
   }
 
   /** Public, secret-free view. */

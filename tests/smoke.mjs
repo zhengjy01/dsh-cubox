@@ -64,6 +64,16 @@ console.log('\n[store]')
   check('digest defaults off', llm.flomoEnabled === false && llm.exportDest === 'flomo' && llm.flomoTag === 'AI/cubox' && llm.flomoMinAgeMinutes === 60 && llm.usePrompt === false && llm.exportPrompt.includes('{digest}'))
   const digestCfg = await store.patch({ flomoEnabled: true, exportDest: 'local', flomoTag: '#我的标签', flomoMinAgeMinutes: 5, usePrompt: true, exportPrompt: '整理：{digest}', notionTargetPageId: 'page123' })
   check('patch digest config', digestCfg.flomoEnabled === true && digestCfg.exportDest === 'local' && digestCfg.flomoTag === '我的标签' && digestCfg.flomoMinAgeMinutes === 5 && digestCfg.usePrompt === true && digestCfg.notionTargetPageId === 'page123')
+
+  // onSaved hook: fires after every successful save (drives the timer re-arm).
+  const savedIntervals = []
+  store.onSaved = (cfg) => savedIntervals.push(cfg.syncMinutes)
+  await store.patch({ syncMinutes: 45 })
+  check('store.onSaved fires on interval save', savedIntervals.length === 1 && savedIntervals[0] === 45, JSON.stringify(savedIntervals))
+  await store.patch({ flomoTag: 'AI/cubox' })
+  check('store.onSaved fires on other saves', savedIntervals.length === 2 && savedIntervals[1] === 45, JSON.stringify(savedIntervals))
+  store.onSaved = undefined
+
   // Restore defaults so later sections (doSync) are unaffected by this block.
   await store.patch({ flomoEnabled: false, exportDest: 'flomo', flomoTag: 'AI/cubox', flomoMinAgeMinutes: 60, usePrompt: false })
 }
@@ -318,12 +328,13 @@ console.log('\n[sync]')
 console.log('\n[apply]')
 {
   const registered = []
+  const routes = []
   const ctx = {
     get: () => null,
     logger: { info: () => {}, warn: () => {} },
     tools: { register: (t) => { registered.push(t.name); return () => {} } },
     systemPrompt: { section: (s) => { registered.push('section:' + s.name); return () => {} } },
-    webServer: { register: (r) => { registered.push('route:' + r.path); return () => {} } },
+    webServer: { register: (r) => { registered.push('route:' + r.path); routes.push(r); return () => {} } },
     effect: (fn) => { const d = fn(); return () => (typeof d === 'function' ? d() : undefined) },
     interval: () => () => {},
   }
@@ -335,9 +346,32 @@ console.log('\n[apply]')
 
   // Timer branch: syncMinutes > 0 schedules (interval called with ms).
   let intervalMs = null
+  routes.length = 0 // only inspect the routes mounted by the second apply
   const ctx2 = { ...ctx, interval: (fn, ms) => { intervalMs = ms; return () => {} } }
   mod.apply(ctx2, { syncMinutes: 5 })
   check('timer scheduled', intervalMs === 5 * 60 * 1000, String(intervalMs))
+
+  // Panel config save re-arms the running timer (no `dsh web` restart needed).
+  // Let the initial store read settle, then drive the real config route twice.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const configRoute = routes.find((r) => r.path === '/api/dsh-cubox/config')
+  const postConfig = async (body) => {
+    const out = { status: 0, body: '' }
+    const res = { writeHead: (status) => { out.status = status }, end: (payload) => { out.body = String(payload) } }
+    const req = {
+      method: 'POST',
+      headers: { host: '127.0.0.1:3080', 'content-type': 'application/json' },
+      socket: { remoteAddress: '127.0.0.1' },
+      async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(body)) },
+    }
+    await configRoute.handler(req, res)
+    return out
+  }
+  await postConfig({ syncMinutes: 7 })
+  const afterSeven = intervalMs
+  const second = await postConfig({ syncMinutes: 17 })
+  check('panel interval save re-arms timer', afterSeven === 7 * 60 * 1000 && intervalMs === 17 * 60 * 1000, 'after7=' + afterSeven + ' after17=' + intervalMs)
+  check('panel interval save persisted to view', second.status === 200 && JSON.parse(second.body).syncMinutes === 17, second.body)
 }
 
 rmSync(tmp, { recursive: true, force: true })
