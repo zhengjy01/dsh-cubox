@@ -16,14 +16,27 @@ export interface CuboxConfigView {
   llmModel: string
   llmKeyMasked: string
   llmPrompt: string
+  flomoEnabled: boolean
+  exportDest: string
+  flomoTag: string
+  flomoMinAgeMinutes: number
+  usePrompt: boolean
+  exportPrompt: string
+  notionConfigured: boolean
+  notionTargetPageId: string
   configPath: string
 }
 
-/** Status view with cache stats. */
+/** Status view with cache + flomo stats. */
 export interface CuboxStatusView extends CuboxConfigView {
   cachedCards: number
   cachedAnnotations: number
   cacheUpdatedAt: string
+  flomoConfigured: boolean
+  flomoSource: string
+  flomoMasked: string
+  flomoConfigPath: string
+  sentAnnotationCount: number
 }
 
 /** Sync result. */
@@ -36,6 +49,19 @@ export interface CuboxSyncResult {
   cachedAnnotations: number
   exportedFiles: number
   briefPath: string
+  digestCandidates: number
+  digestMemos: number
+  digestMessage: string
+}
+
+/** Digest delivery result. */
+export interface CuboxDigestResult {
+  ok: boolean
+  dest: string
+  candidates: number
+  memos: number
+  delivered: number
+  message: string
 }
 
 /** Error carrying the route's JSON error message. */
@@ -105,5 +131,33 @@ export class CuboxApi {
     return request<{ ok: boolean; path?: string; cancelled?: boolean; unsupported?: boolean; message?: string }>('/api/dsh-cubox/pick-dir', {
       method: 'POST',
     })
+  }
+
+  /** Push the annotation digest to flomo (respects the dedup ledger). */
+  async pushFlomo(body: { days?: number; force?: boolean; tag?: string } = {}): Promise<CuboxDigestResult> {
+    return request<CuboxDigestResult>('/api/dsh-cubox/flomo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** Push the annotation digest to the configured destination. */
+  async pushDigest(body: { days?: number; force?: boolean; tag?: string } = {}): Promise<CuboxDigestResult> {
+    return request<CuboxDigestResult>('/api/dsh-cubox/digest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** Send a test memo to verify the flomo credential. */
+  async testFlomo(): Promise<{ ok: boolean; message: string }> {
+    return request<{ ok: boolean; message: string }>('/api/dsh-cubox/test-flomo', { method: 'POST' })
+  }
+
+  /** Verify the Notion token + target page. */
+  async testNotion(): Promise<{ ok: boolean; message: string }> {
+    return request<{ ok: boolean; message: string }>('/api/dsh-cubox/test-notion', { method: 'POST' })
   }
 }

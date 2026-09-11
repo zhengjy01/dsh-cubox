@@ -23,6 +23,10 @@ export declare const CUBOX_API: {
     readonly sync: "/api/dsh-cubox/sync";
     readonly status: "/api/dsh-cubox/status";
     readonly pickDir: "/api/dsh-cubox/pick-dir";
+    readonly flomo: "/api/dsh-cubox/flomo";
+    readonly digest: "/api/dsh-cubox/digest";
+    readonly testFlomo: "/api/dsh-cubox/test-flomo";
+    readonly testNotion: "/api/dsh-cubox/test-notion";
 };
 /** Route handler context. */
 export interface RouteContext {
@@ -54,5 +58,21 @@ export declare function makeRoutes(deps: RouteContext): ({
 } | {
     kind: "exact";
     path: "/api/dsh-cubox/pick-dir";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+} | {
+    kind: "exact";
+    path: "/api/dsh-cubox/flomo";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+} | {
+    kind: "exact";
+    path: "/api/dsh-cubox/digest";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+} | {
+    kind: "exact";
+    path: "/api/dsh-cubox/test-flomo";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+} | {
+    kind: "exact";
+    path: "/api/dsh-cubox/test-notion";
     handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 })[];

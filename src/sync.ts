@@ -15,6 +15,7 @@ import { todayRange } from './api.ts'
 import type { CuboxStore } from './store.ts'
 import { cachePath } from './store.ts'
 import { chatComplete, llmConfigured, type LlmConfig } from './llm.ts'
+import { deliverAnnotationDigest, type DigestResult } from './digest.ts'
 
 /** Sync snapshot persisted to the cache file. */
 export interface CuboxCache {
@@ -36,6 +37,12 @@ export interface SyncResult {
   exportedFiles: number
   /** Path of the LLM daily brief written ('' = not written). */
   briefPath: string
+  /** Annotation digest candidates selected this run (0 = none). */
+  digestCandidates: number
+  /** flomo/other memos (or files/pages) delivered for the digest. */
+  digestMemos: number
+  /** Human-readable digest delivery message ('' = not attempted). */
+  digestMessage: string
 }
 
 /** Parse the cache file (missing/unreadable → empty). */
@@ -153,11 +160,24 @@ export async function doSync(
     }
   }
 
+  // Annotation digest: push newly settled/changed annotations to the configured
+  // target (flomo by default). Gated by flomoEnabled; the local dedup ledger
+  // prevents re-pushing. Failures degrade gracefully (snapshot is already saved).
+  let digest: DigestResult | null = null
+  if (cfg.flomoEnabled) {
+    try {
+      digest = await deliverAnnotationDigest(cache, cfg, { outputDir: outputDir.trim() })
+    } catch (digestError) {
+      warnings.push('标注 digest 导出失败：' + String(digestError instanceof Error ? digestError.message : digestError))
+    }
+  }
+
   const message =
     '同步完成：拉取卡片 ' + cards.length + ' 条、标注 ' + annotations.length + ' 条；' +
     '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。' +
     (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个收藏 Markdown 到 ' + outputDir.trim() : '') +
     (briefPath !== '' ? '已生成简报：' + briefPath : '') +
+    (digest !== null && digest.candidates > 0 ? '标注 digest：' + digest.message : '') +
     (warnings.length > 0 ? '\n警告：' + warnings.join('；') : '')
   return {
     ok: true,
@@ -169,6 +189,9 @@ export async function doSync(
     since: cardStart,
     exportedFiles,
     briefPath,
+    digestCandidates: digest?.candidates ?? 0,
+    digestMemos: digest?.memos ?? 0,
+    digestMessage: digest?.message ?? '',
   }
 }
 

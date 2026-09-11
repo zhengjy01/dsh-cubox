@@ -32,6 +32,8 @@ function check(name, condition, detail = '') {
 const tmp = mkdtempSync(path.join(tmpdir(), 'dsh-cubox-test-'))
 process.env.DSH_CUBOX_CONFIG = path.join(tmp, 'config.json')
 process.env.DSH_CUBOX_CACHE = path.join(tmp, 'cache.json')
+process.env.DSH_CUBOX_FLOMO_CONFIG = path.join(tmp, 'flomo.json')
+process.env.DSH_CUBOX_FLOMO_LEDGER = path.join(tmp, 'flomo-ledger.json')
 
 // ---------------------------------------------------------------- store
 console.log('\n[store]')
@@ -58,6 +60,12 @@ console.log('\n[store]')
   check('patch bare token/server', bare.configured === true && bare.server === 'cubox.pro')
   const llm = await store.patch({ exportCards: false, llmApiKey: 'sk-abc12345', llmModel: 'deepseek-chat', llmPrompt: '请总结：{collection}' })
   check('patch llm + exportCards', llm.exportCards === false && llm.llmKeyMasked === 'sk-a****2345' && llm.llmPrompt.includes('{collection}'))
+
+  check('digest defaults off', llm.flomoEnabled === false && llm.exportDest === 'flomo' && llm.flomoTag === 'AI/cubox' && llm.flomoMinAgeMinutes === 60 && llm.usePrompt === false && llm.exportPrompt.includes('{digest}'))
+  const digestCfg = await store.patch({ flomoEnabled: true, exportDest: 'local', flomoTag: '#我的标签', flomoMinAgeMinutes: 5, usePrompt: true, exportPrompt: '整理：{digest}', notionTargetPageId: 'page123' })
+  check('patch digest config', digestCfg.flomoEnabled === true && digestCfg.exportDest === 'local' && digestCfg.flomoTag === '我的标签' && digestCfg.flomoMinAgeMinutes === 5 && digestCfg.usePrompt === true && digestCfg.notionTargetPageId === 'page123')
+  // Restore defaults so later sections (doSync) are unaffected by this block.
+  await store.patch({ flomoEnabled: false, exportDest: 'flomo', flomoTag: 'AI/cubox', flomoMinAgeMinutes: 60, usePrompt: false })
 }
 
 // ----------------------------------------------------------------- api
@@ -94,6 +102,74 @@ console.log('\n[api]')
   let threw = null
   try { await api2.listFolders() } catch (e) { threw = e }
   check('api error mapped', threw !== null && threw.name === 'CuboxApiError' && String(threw.message).includes('API Key'), String(threw?.message))
+}
+
+// --------------------------------------------------------------- flomo
+console.log('\n[flomo]')
+{
+  const { stripHashTags, buildTaggedContent, resolveFlomoUrl, writeFlomoCredentials, flomoStatus } = mod
+  check('stripHashTags removes every #', stripHashTags('标题 #tag 与 #另一个，还有 C#') === '标题 tag 与 另一个，还有 C')
+  check('buildTaggedContent appends one tag', buildTaggedContent('正文 #x', 'AI/cubox') === '正文 x #AI/cubox')
+  check('buildTaggedContent splits tag list', buildTaggedContent('正文', 'a, b') === '正文 #a #b')
+  check('flomo unconfigured initially', (await resolveFlomoUrl()) === null)
+  await writeFlomoCredentials({ webhookUrl: 'https://flomoapp.com/iwh/testtoken', apiKey: '' })
+  check('flomo resolves webhook url', (await resolveFlomoUrl()) === 'https://flomoapp.com/iwh/testtoken')
+  const st = await flomoStatus()
+  check('flomo status masked', st.configured === true && st.source === 'webhookUrl' && st.masked.includes('****') && !JSON.stringify(st).includes('testtoken'))
+}
+
+// -------------------------------------------------------------- digest
+console.log('\n[digest]')
+{
+  const { formatApiTime, annotationHash, selectUnpushedAnnotations, buildDigestMemos, readFlomoLedger, writeFlomoLedger, chunkText, parseCuboxTime } = mod
+  const now = new Date()
+  const ago = (min) => formatApiTime(new Date(now.getTime() - min * 60000))
+  check('parseCuboxTime parses +0800', parseCuboxTime('2026-08-23T10:00:00.000+0800') === new Date('2026-08-23T10:00:00.000+08:00').getTime())
+  check('parseCuboxTime rejects junk', parseCuboxTime('not-a-date') === 0)
+
+  const cards = [
+    { id: 'c1', title: '标题一', description: '', article_title: '', domain: 'a.com', read: false, starred: false, tags: [], folder: null, url: 'https://a.com/1', create_time: ago(200), update_time: ago(200) },
+    { id: 'c2', title: 'C# 与 标签', description: '', article_title: '', domain: 'b.com', read: false, starred: false, tags: [], folder: null, url: 'https://b.com/2', create_time: ago(200), update_time: ago(200) },
+  ]
+  const anns = [
+    { id: 'old', text: '十天前的旧标注', note: '', image_url: '', color: 'Yellow', card_id: 'c1', create_time: ago(10 * 24 * 60), update_time: ago(10 * 24 * 60) },
+    { id: 'fresh', text: '刚写的', note: '', image_url: '', color: 'Yellow', card_id: 'c1', create_time: ago(5), update_time: ago(5) },
+    { id: 'a1', text: '关键段落 #要点', note: '我的笔记', image_url: '', color: 'Yellow', card_id: 'c1', create_time: ago(120), update_time: ago(120) },
+    { id: 'a2', text: '第二个高亮', note: '', image_url: '', color: 'Blue', card_id: 'c2', create_time: ago(130), update_time: ago(130) },
+  ]
+  const cache = { updatedAt: now.toISOString(), cards, annotations: anns }
+
+  const picked = selectUnpushedAnnotations(cache, { ledger: {}, now, windowDays: 2, minAgeMinutes: 60 })
+  check('select filters window + min age', picked.map((a) => a.id).join(',') === 'a2,a1', picked.map((a) => a.id).join(','))
+
+  const ledger = { a1: annotationHash(anns[2]) }
+  const picked2 = selectUnpushedAnnotations(cache, { ledger, now, windowDays: 2, minAgeMinutes: 60 })
+  check('select skips already-pushed id', picked2.map((a) => a.id).join(',') === 'a2', picked2.map((a) => a.id).join(','))
+
+  const changed = { ...cache, annotations: anns.map((a) => (a.id === 'a1' ? { ...a, note: '改过的笔记' } : a)) }
+  const picked3 = selectUnpushedAnnotations(changed, { ledger, now, windowDays: 2, minAgeMinutes: 60 })
+  check('select re-picks changed annotation', picked3.map((a) => a.id).join(',') === 'a2,a1', picked3.map((a) => a.id).join(','))
+
+  const memos = buildDigestMemos(cache, [anns[2], anns[3]], { date: now })
+  check('digest one memo for small set', memos.length === 1 && memos[0].annotationIds.length === 2)
+  const body = memos[0].content
+  check('digest has title/link/highlight/note', body.includes('《标题一》') && body.includes('https://a.com/1') && body.includes('- 高亮：关键段落 #要点') && body.includes('  - 笔记：我的笔记'), body)
+
+  const many = []
+  for (let i = 0; i < 40; i++) {
+    many.push({ id: 'x' + i, text: '长内容'.repeat(60), note: '', image_url: '', color: 'Yellow', card_id: 'c1', create_time: ago(300 - i), update_time: ago(300 - i) })
+  }
+  const manyMemos = buildDigestMemos(cache, many, { date: now })
+  check('digest splits when long', manyMemos.length > 1, 'memos=' + manyMemos.length)
+  check('continuation repeats card header', manyMemos.slice(1).every((m) => m.content.includes('（续）') && m.content.includes('《标题一》')))
+  check('digest keeps every annotation id', manyMemos.reduce((n, m) => n + m.annotationIds.length, 0) === 40)
+
+  await writeFlomoLedger({ a1: 'hash1' })
+  const ledgerBack = await readFlomoLedger()
+  check('ledger round-trip', ledgerBack.a1 === 'hash1')
+
+  const chunks = chunkText(Array.from({ length: 80 }, (_, i) => '行' + i).join('\n'), 60, '头')
+  check('chunkText split + header', chunks.length > 1 && chunks[0].startsWith('头') && chunks[1].startsWith('头（续）'))
 }
 
 // --------------------------------------------------------------- sync
@@ -202,6 +278,40 @@ console.log('\n[sync]')
   } finally {
     globalThis.fetch = origFetch
   }
+
+  // doSync pushes newly settled annotations to flomo when flomoEnabled (stubbed).
+  const { formatApiTime, readFlomoLedger, writeFlomoLedger } = mod
+  await writeFlomoLedger({})
+  const past = new Date(Date.now() - 2 * 60 * 60 * 1000)
+  const tooFresh = new Date(Date.now() - 10 * 60 * 1000)
+  await writeCache({
+    updatedAt: new Date().toISOString(),
+    cards: [{ id: 'fc1', title: 'flomo 卡片', description: '', article_title: '', domain: 'a.com', read: false, starred: false, tags: [], folder: null, url: 'https://a.com/fc1', create_time: formatApiTime(past), update_time: formatApiTime(past) }],
+    annotations: [
+      { id: 'fa1', text: '值得记的 #要点', note: '想法', image_url: '', color: 'Yellow', card_id: 'fc1', create_time: formatApiTime(past), update_time: formatApiTime(past) },
+      { id: 'fa2', text: '太新了', note: '', image_url: '', color: 'Yellow', card_id: 'fc1', create_time: formatApiTime(tooFresh), update_time: formatApiTime(tooFresh) },
+    ],
+  })
+  await store.patch({ token: 'tok12345', flomoEnabled: true, exportDest: 'flomo', flomoTag: 'AI/cubox', flomoMinAgeMinutes: 60, outputDir: '', exportCards: false, llmApiKey: '' })
+  const posted = []
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('flomoapp')) {
+      posted.push(JSON.parse(init.body).content)
+      return { ok: true, status: 200, text: async () => JSON.stringify({ code: 0, message: 'ok' }) }
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify({ code: 200, message: 'ok', data: [] }) }
+  }
+  try {
+    const r3 = await doSync(api, store, { days: 1, limit: 10 })
+    check('doSync pushes flomo digest', posted.length === 1 && r3.digestCandidates === 1 && r3.digestMemos === 1, JSON.stringify({ posted: posted.length, candidates: r3.digestCandidates }))
+    check('flomo body keeps only the tag #', posted[0].includes('要点') && posted[0].includes('#AI/cubox') && !posted[0].replace('#AI/cubox', '').includes('#'))
+    const ledgerAfter = await readFlomoLedger()
+    check('ledger records pushed (not too-fresh)', ledgerAfter.fa1 !== undefined && ledgerAfter.fa2 === undefined)
+    const r4 = await doSync(api, store, { days: 1, limit: 10 })
+    check('doSync flomo dedupe (no re-push)', posted.length === 1 && r4.digestCandidates === 0, JSON.stringify({ posted: posted.length, candidates: r4.digestCandidates }))
+  } finally {
+    globalThis.fetch = origFetch
+  }
 }
 
 // ------------------------------------------------------------- apply
@@ -218,10 +328,10 @@ console.log('\n[apply]')
     interval: () => () => {},
   }
   mod.apply(ctx, { syncMinutes: 0 })
-  const tools = ['cubox_status', 'cubox_config', 'cubox_sync', 'cubox_cards']
+  const tools = ['cubox_status', 'cubox_config', 'cubox_sync', 'cubox_cards', 'cubox_flomo']
   for (const name of tools) check('tool registered: ' + name, registered.includes(name))
   check('section registered', registered.includes('section:plugin:dsh-cubox'))
-  check('routes registered', registered.includes('route:/api/dsh-cubox/config') && registered.includes('route:/api/dsh-cubox/sync') && registered.includes('route:/api/dsh-cubox/pick-dir'))
+  check('routes registered', registered.includes('route:/api/dsh-cubox/config') && registered.includes('route:/api/dsh-cubox/sync') && registered.includes('route:/api/dsh-cubox/pick-dir') && registered.includes('route:/api/dsh-cubox/flomo') && registered.includes('route:/api/dsh-cubox/test-flomo'), registered.filter((r) => r.startsWith('route:')).join(', '))
 
   // Timer branch: syncMinutes > 0 schedules (interval called with ms).
   let intervalMs = null

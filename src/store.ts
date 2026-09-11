@@ -61,7 +61,35 @@ export interface CuboxCredentials {
   llmModel: string
   /** Prompt template for the daily brief; {collection} is replaced with the formatted collection. */
   llmPrompt: string
+  /** Whether to export newly settled annotations as a digest after each sync. */
+  flomoEnabled: boolean
+  /** Annotation digest destination. */
+  exportDest: ExportDest
+  /** flomo tag appended to the digest (without leading #). */
+  flomoTag: string
+  /** Minimum annotation age (minutes) before it may be pushed (avoid half-typed notes). */
+  flomoMinAgeMinutes: number
+  /** Whether to run the digest through the LLM exportPrompt before delivery. */
+  usePrompt: boolean
+  /** Digest prompt template; {digest} is replaced with the raw digest. */
+  exportPrompt: string
+  /** Notion integration token (for exportDest=notion). */
+  notionToken: string
+  /** Notion target parent page id or URL (for exportDest=notion). */
+  notionTargetPageId: string
 }
+
+/** Annotation digest destination. */
+export type ExportDest = 'flomo' | 'local' | 'notion'
+
+/** Default flomo tag for the Cubox annotation digest. */
+export const DEFAULT_FLOMO_TAG = 'AI/cubox'
+
+/** Default digest prompt template ({digest} placeholder). */
+export const DEFAULT_EXPORT_PROMPT =
+  '你是信息整理助手。请把下面的 Cubox 标注整理成一条简洁的「今日标注回顾」纯文本笔记：\n' +
+  '保留每条标注的卡片标题与原文链接，语言精炼，不要使用 # 号，不要添加任何标签。\n\n' +
+  '{digest}'
 
 /** Default prompt for the daily collection brief. */
 export const DEFAULT_LLM_PROMPT =
@@ -91,6 +119,14 @@ export interface CuboxConfigView {
   llmModel: string
   llmKeyMasked: string
   llmPrompt: string
+  flomoEnabled: boolean
+  exportDest: ExportDest
+  flomoTag: string
+  flomoMinAgeMinutes: number
+  usePrompt: boolean
+  exportPrompt: string
+  notionConfigured: boolean
+  notionTargetPageId: string
   configPath: string
 }
 
@@ -142,6 +178,14 @@ function empty(): CuboxCredentials {
     llmApiKey: '',
     llmModel: 'deepseek-chat',
     llmPrompt: DEFAULT_LLM_PROMPT,
+    flomoEnabled: false,
+    exportDest: 'flomo',
+    flomoTag: DEFAULT_FLOMO_TAG,
+    flomoMinAgeMinutes: 60,
+    usePrompt: false,
+    exportPrompt: DEFAULT_EXPORT_PROMPT,
+    notionToken: '',
+    notionTargetPageId: '',
   }
 }
 
@@ -152,6 +196,8 @@ function parse(raw: unknown): CuboxCredentials {
   const str = (value: unknown): string => (typeof value === 'string' ? value : '')
   const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 60)
   const bool = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback)
+  const dest = (value: unknown): ExportDest =>
+    value === 'local' || value === 'notion' ? value : 'flomo'
   return {
     server,
     token: str(record.token),
@@ -163,6 +209,14 @@ function parse(raw: unknown): CuboxCredentials {
     llmApiKey: str(record.llmApiKey),
     llmModel: str(record.llmModel) || 'deepseek-chat',
     llmPrompt: str(record.llmPrompt) || DEFAULT_LLM_PROMPT,
+    flomoEnabled: bool(record.flomoEnabled, false),
+    exportDest: dest(record.exportDest),
+    flomoTag: str(record.flomoTag).replace(/^#+/, '') || DEFAULT_FLOMO_TAG,
+    flomoMinAgeMinutes: num(record.flomoMinAgeMinutes),
+    usePrompt: bool(record.usePrompt, false),
+    exportPrompt: str(record.exportPrompt) || DEFAULT_EXPORT_PROMPT,
+    notionToken: str(record.notionToken),
+    notionTargetPageId: str(record.notionTargetPageId),
   }
 }
 
@@ -207,6 +261,14 @@ export class CuboxStore {
       llmModel: cfg.llmModel,
       llmKeyMasked: cfg.llmApiKey.trim() !== '' ? mask(cfg.llmApiKey) : '',
       llmPrompt: cfg.llmPrompt,
+      flomoEnabled: cfg.flomoEnabled,
+      exportDest: cfg.exportDest,
+      flomoTag: cfg.flomoTag,
+      flomoMinAgeMinutes: cfg.flomoMinAgeMinutes,
+      usePrompt: cfg.usePrompt,
+      exportPrompt: cfg.exportPrompt,
+      notionConfigured: cfg.notionToken.trim() !== '',
+      notionTargetPageId: cfg.notionTargetPageId,
       configPath: configPath(),
     }
   }
@@ -242,6 +304,20 @@ export class CuboxStore {
     if (args !== undefined && typeof args.llmApiKey === 'string') next.llmApiKey = args.llmApiKey.trim()
     if (args !== undefined && typeof args.llmModel === 'string') next.llmModel = args.llmModel.trim()
     if (args !== undefined && typeof args.llmPrompt === 'string') next.llmPrompt = args.llmPrompt
+    if (args !== undefined && typeof args.flomoEnabled === 'boolean') next.flomoEnabled = args.flomoEnabled
+    if (args !== undefined && (args.exportDest === 'flomo' || args.exportDest === 'local' || args.exportDest === 'notion')) {
+      next.exportDest = args.exportDest
+    }
+    if (args !== undefined && typeof args.flomoTag === 'string') {
+      next.flomoTag = args.flomoTag.trim().replace(/^#+/, '') || DEFAULT_FLOMO_TAG
+    }
+    if (args !== undefined && typeof args.flomoMinAgeMinutes === 'number' && Number.isFinite(args.flomoMinAgeMinutes)) {
+      next.flomoMinAgeMinutes = Math.max(0, Math.floor(args.flomoMinAgeMinutes))
+    }
+    if (args !== undefined && typeof args.usePrompt === 'boolean') next.usePrompt = args.usePrompt
+    if (args !== undefined && typeof args.exportPrompt === 'string') next.exportPrompt = args.exportPrompt
+    if (args !== undefined && typeof args.notionToken === 'string') next.notionToken = args.notionToken.trim()
+    if (args !== undefined && typeof args.notionTargetPageId === 'string') next.notionTargetPageId = args.notionTargetPageId.trim()
     await this.save(next)
     return this.view()
   }

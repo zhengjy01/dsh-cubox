@@ -35,10 +35,13 @@ export interface Config {
  */
 export declare function apply(ctx: Context, config?: Config): void;
 /** Re-exports for host consumers and the smoke tests. */
-export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, type CuboxConfigView, type CuboxCredentials } from './store.ts';
+export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, DEFAULT_FLOMO_TAG, DEFAULT_EXPORT_PROMPT, type CuboxConfigView, type CuboxCredentials, type ExportDest } from './store.ts';
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts';
-export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, buildTools, type ToolContext } from './tools.ts';
+export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, cuboxFlomoTool, buildTools, type ToolContext } from './tools.ts';
 export { doSync, readCache, writeCache, exportSyncToMarkdown, formatCollectionForPrompt, writeDailyBrief, type CuboxCache, type SyncResult } from './sync.ts';
+export { deliverAnnotationDigest, buildDigestMemos, buildDigestMarkdown, selectUnpushedAnnotations, readFlomoLedger, writeFlomoLedger, annotationHash, parseCuboxTime, ymd, annotationsInWindow, chunkText, digestHeader, flomoLedgerPath, FLOMO_MAX_CHARS, DEFAULT_DIGEST_WINDOW_DAYS, DEFAULT_FLOMO_LEDGER_FILE, type FlomoLedger, type DigestResult, type DigestMemo, type DigestOptions, } from './digest.ts';
+export { resolveFlomoUrl, flomoConfigured, flomoStatus, readFlomoCredentials, writeFlomoCredentials, postMemo, buildTaggedContent, stripHashTags, flomoConfigPath, FLOMO_CONFIG_FILE, type FlomoStatusView, type FlomoCredentials } from './flomo.ts';
+export { exportToNotion, testNotion, normalizeNotionPageId, toNotionBlocks, NOTION_API, NOTION_VERSION } from './notion.ts';
 export { chatComplete, llmConfigured, type LlmConfig } from './llm.ts';
 export { makeRoutes, CUBOX_API, type NativeDirectoryPicker } from './routes.ts';
 export { defineTool };

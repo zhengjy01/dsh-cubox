@@ -10,8 +10,9 @@ DeepSeek Harness 的 [Cubox](https://cubox.pro)（收藏阅读工具）同步插
 - **AI 每日简报** — 填写你自己的 prompt 模板（如「今日收藏简报」，`{collection}` 会被替换为**同步窗口内**的收藏列表：标题 / 来源 / 摘要 / 标注）。配置 LLM key 后，每次同步按窗口生成简报到导出目录：1 天 → `今日收藏简报-YYYY-MM-DD.md`；多天（如 7 天）→ `最近N日收藏简报-YYYY-MM-DD.md`，**每个窗口独立文件，不互相覆盖**。
 - **Markdown 导出** — 配置 `outputDir` 后，可勾选「每张收藏一个 md 文件」（frontmatter + 标题 + 描述 + Cubox/原文链接 + 标注，与官方 Cubox Obsidian 插件同款格式）；**取消勾选则只写 AI 简报**，Obsidian 顶部不会堆卡片。
 - **查询** — `cubox_cards` 按关键词、时间窗口、是否已标注 / 星标 / 已读过滤。
-- **配置与状态** — `cubox_config` / `cubox_status`；凭据持久化到 `~/.dsh/dsh-cubox.json`（权限 0600），不回显密钥。
-- **设置面板** — 设置 → Cubox：粘贴 API 扩展链接、设置同步间隔、选择本地导出文件夹（系统目录选择器）、开关卡片导出、**编辑 AI 简报 prompt 与 LLM 配置**（OpenAI 兼容，默认 DeepSeek）。
+- **flomo 标注同步** — 同步后把**新增 / 变更的标注**（划线 + 想法）以每日 digest（卡片标题 + 链接 + 标注）推送到 [flomo](https://flomoapp.com)。要点：复用 `~/.dsh/dsh-flomo.json` 凭据（与「Flomo」面板共享，不新增密钥）；**本地去重账本**（`~/.dsh/.cubox-flomo-annotations-sent`）保证同一标注不重复推送；只推创建满 N 分钟（默认 60）的标注，避免半截内容；正文自动去除 `#`（flomo 会把 `#词` 抓成标签），只保留配置标签；超长自动拆成多条 MEMO；目标可选 `flomo` / 本地 Markdown / Notion，可用 LLM 按 `{digest}` prompt 先整理。
+- **配置与状态** — `cubox_config` / `cubox_status` / `cubox_flomo`；凭据持久化到 `~/.dsh/dsh-cubox.json`（权限 0600），不回显密钥。
+- **设置面板** — 设置 → Cubox：粘贴 API 扩展链接、设置同步间隔、选择本地导出文件夹（系统目录选择器）、开关卡片导出、**编辑 AI 简报 prompt 与 LLM 配置**（OpenAI 兼容，默认 DeepSeek）、**配置 flomo 标注同步并手动推送**。
 
 ## 安装
 
@@ -51,9 +52,10 @@ dsh plugin --profile web add link:/path/to/dsh-cubox
 | 工具 | 用途 |
 | --- | --- |
 | `cubox_status` | 连接与缓存状态 |
-| `cubox_config` | 设置 / 清除 `apiLink`、`server`、`token`、`syncMinutes`、`outputDir`、`exportCards`、`llmBaseUrl`、`llmApiKey`、`llmModel`、`llmPrompt` |
-| `cubox_sync` | 拉取最近 N 天（默认今天）到本地缓存 + 导出 Markdown + AI 简报 |
+| `cubox_config` | 设置 / 清除 `apiLink`、`server`、`token`、`syncMinutes`、`outputDir`、`exportCards`、`llm*`，以及标注 digest 的 `flomoEnabled` / `exportDest` / `flomoTag` / `flomoMinAgeMinutes` / `usePrompt` / `exportPrompt` / `notion*` |
+| `cubox_sync` | 拉取最近 N 天（默认今天）到本地缓存 + 导出 Markdown + AI 简报 + 标注 digest 推送 |
 | `cubox_cards` | 查询收藏（关键词 / 天数 / 已标注 / 星标 / 已读） |
+| `cubox_flomo` | 把新增 / 变更标注立即推送到 flomo（`days` 窗口 / `force` 忽略最短等待 / `tag` 覆盖标签） |
 
 ## 说明
 

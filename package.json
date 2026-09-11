@@ -1,7 +1,7 @@
 {
   "name": "dsh-cubox",
-  "version": "0.1.0",
-  "description": "Cubox sync for DeepSeek Harness: scheduled sync of your bookmarks, today's collection outline, and aggregated annotations/notes via the Cubox API-extension endpoints (/c/api/cli) — agent tools plus a web settings panel",
+  "version": "0.2.0",
+  "description": "Cubox sync for DeepSeek Harness: scheduled sync of your bookmarks, aggregated annotations, an AI daily brief, and a flomo annotation digest with a local dedup ledger — agent tools plus a web settings panel",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

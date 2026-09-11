@@ -10,6 +10,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { CuboxStore } from './store.ts'
 import type { CuboxApi } from './api.ts'
 import { doSync, readCache } from './sync.ts'
+import { readFlomoCredentials, writeFlomoCredentials, flomoStatus, resolveFlomoUrl, postMemo } from './flomo.ts'
+import { deliverAnnotationDigest, readFlomoLedger } from './digest.ts'
+import { testNotion } from './notion.ts'
 
 /** Minimal host directory-picker seam (duck-typed; native = OS folder chooser). */
 export interface NativeDirectoryPicker {
@@ -22,6 +25,10 @@ export const CUBOX_API = {
   sync: '/api/dsh-cubox/sync',
   status: '/api/dsh-cubox/status',
   pickDir: '/api/dsh-cubox/pick-dir',
+  flomo: '/api/dsh-cubox/flomo',
+  digest: '/api/dsh-cubox/digest',
+  testFlomo: '/api/dsh-cubox/test-flomo',
+  testNotion: '/api/dsh-cubox/test-notion',
 } as const
 
 /** Cap on JSON request bodies. */
@@ -124,7 +131,29 @@ export function makeRoutes(deps: RouteContext) {
             writeJson(res, 400, { error: 'invalid JSON body' })
             return
           }
-          writeJson(res, 200, await store.patch(body))
+          // flomo credentials are shared with the dsh-flomo plugin: saving
+          // them here writes ~/.dsh/dsh-flomo.json (one place, both plugins).
+          const hasFlomoFields = body.flomoWebhookUrl !== undefined || body.flomoApiKey !== undefined || body.flomoReset === true
+          if (hasFlomoFields) {
+            const creds = await readFlomoCredentials()
+            const next = { ...creds }
+            if (body.flomoReset === true) {
+              next.webhookUrl = ''
+              next.apiKey = ''
+            } else {
+              if (typeof body.flomoWebhookUrl === 'string') next.webhookUrl = body.flomoWebhookUrl.trim()
+              if (typeof body.flomoApiKey === 'string') next.apiKey = body.flomoApiKey.trim()
+            }
+            await writeFlomoCredentials(next)
+            const rest = { ...body }
+            delete rest.flomoWebhookUrl
+            delete rest.flomoApiKey
+            delete rest.flomoReset
+            await store.patch(rest)
+          } else {
+            await store.patch(body)
+          }
+          writeJson(res, 200, await store.view())
           return
         }
         writeJson(res, 405, { error: `method not allowed: ${method}` })
@@ -137,11 +166,18 @@ export function makeRoutes(deps: RouteContext) {
         if (!guard(req, res, 'GET')) return
         const view = await store.view()
         const cache = await readCache()
+        const flomo = await flomoStatus()
+        const ledger = await readFlomoLedger()
         writeJson(res, 200, {
           ...view,
           cachedCards: cache.cards.length,
           cachedAnnotations: cache.annotations.length,
           cacheUpdatedAt: cache.updatedAt,
+          flomoConfigured: flomo.configured,
+          flomoSource: flomo.source,
+          flomoMasked: flomo.masked,
+          flomoConfigPath: flomo.configPath,
+          sentAnnotationCount: Object.keys(ledger).length,
         })
       },
     },
@@ -191,6 +227,91 @@ export function makeRoutes(deps: RouteContext) {
           writeJson(res, 200, { ok: false, unsupported: true, message: '当前为远程浏览模式，不支持系统文件夹对话框，请手动输入路径。' })
         } catch (error) {
           writeJson(res, 200, { ok: false, message: '选择文件夹失败：' + String(error instanceof Error ? error.message : error) })
+        }
+      },
+    },
+    {
+      // Manual push of the annotation digest to flomo (respects the ledger).
+      kind: 'exact' as const,
+      path: CUBOX_API.flomo,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!guard(req, res, 'POST')) return
+        const view = await store.view()
+        if (!view.configured) {
+          writeJson(res, 400, { error: '未配置 Cubox API 链接：请先填写 API 扩展链接。' })
+          return
+        }
+        const body = (await readJsonBody(req)) ?? {}
+        try {
+          const cfg = await store.load()
+          const cache = await readCache()
+          const result = await deliverAnnotationDigest(cache, cfg, {
+            dest: 'flomo',
+            windowDays: typeof body.days === 'number' && body.days > 0 ? body.days : undefined,
+            force: body.force === true,
+            tag: typeof body.tag === 'string' ? body.tag : undefined,
+          })
+          writeJson(res, 200, result)
+        } catch (error) {
+          writeJson(res, 200, { ok: false, message: '推送标注失败：' + String(error instanceof Error ? error.message : error) })
+        }
+      },
+    },
+    {
+      // Manual push of the annotation digest to the configured destination.
+      kind: 'exact' as const,
+      path: CUBOX_API.digest,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!guard(req, res, 'POST')) return
+        const view = await store.view()
+        if (!view.configured) {
+          writeJson(res, 400, { error: '未配置 Cubox API 链接：请先填写 API 扩展链接。' })
+          return
+        }
+        const body = (await readJsonBody(req)) ?? {}
+        try {
+          const cfg = await store.load()
+          const cache = await readCache()
+          const result = await deliverAnnotationDigest(cache, cfg, {
+            dest: cfg.exportDest,
+            windowDays: typeof body.days === 'number' && body.days > 0 ? body.days : undefined,
+            force: body.force === true,
+            tag: typeof body.tag === 'string' ? body.tag : undefined,
+          })
+          writeJson(res, 200, result)
+        } catch (error) {
+          writeJson(res, 200, { ok: false, message: '导出标注 digest 失败：' + String(error instanceof Error ? error.message : error) })
+        }
+      },
+    },
+    {
+      kind: 'exact' as const,
+      path: CUBOX_API.testFlomo,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!guard(req, res, 'POST')) return
+        const url = await resolveFlomoUrl()
+        if (url === null) {
+          writeJson(res, 200, { ok: false, message: 'flomo 未配置：请先在「flomo 标注同步」区填写 API URL / API Key 并保存。' })
+          return
+        }
+        try {
+          const result = await postMemo(url, '✅ dsh-cubox 测试：flomo 配置有效（' + new Date().toISOString() + '）')
+          writeJson(res, 200, result)
+        } catch (error) {
+          writeJson(res, 200, { ok: false, message: '测试失败：' + String(error instanceof Error ? error.message : error) })
+        }
+      },
+    },
+    {
+      kind: 'exact' as const,
+      path: CUBOX_API.testNotion,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!guard(req, res, 'POST')) return
+        const cfg = await store.load()
+        try {
+          writeJson(res, 200, await testNotion(cfg.notionToken, cfg.notionTargetPageId))
+        } catch (error) {
+          writeJson(res, 200, { ok: false, message: '测试失败：' + String(error instanceof Error ? error.message : error) })
         }
       },
     },

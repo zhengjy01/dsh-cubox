@@ -29,6 +29,12 @@ export interface SyncResult {
     exportedFiles: number;
     /** Path of the LLM daily brief written ('' = not written). */
     briefPath: string;
+    /** Annotation digest candidates selected this run (0 = none). */
+    digestCandidates: number;
+    /** flomo/other memos (or files/pages) delivered for the digest. */
+    digestMemos: number;
+    /** Human-readable digest delivery message ('' = not attempted). */
+    digestMessage: string;
 }
 /** Parse the cache file (missing/unreadable → empty). */
 export declare function readCache(): Promise<CuboxCache>;

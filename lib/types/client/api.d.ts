@@ -15,13 +15,26 @@ export interface CuboxConfigView {
     llmModel: string;
     llmKeyMasked: string;
     llmPrompt: string;
+    flomoEnabled: boolean;
+    exportDest: string;
+    flomoTag: string;
+    flomoMinAgeMinutes: number;
+    usePrompt: boolean;
+    exportPrompt: string;
+    notionConfigured: boolean;
+    notionTargetPageId: string;
     configPath: string;
 }
-/** Status view with cache stats. */
+/** Status view with cache + flomo stats. */
 export interface CuboxStatusView extends CuboxConfigView {
     cachedCards: number;
     cachedAnnotations: number;
     cacheUpdatedAt: string;
+    flomoConfigured: boolean;
+    flomoSource: string;
+    flomoMasked: string;
+    flomoConfigPath: string;
+    sentAnnotationCount: number;
 }
 /** Sync result. */
 export interface CuboxSyncResult {
@@ -33,6 +46,18 @@ export interface CuboxSyncResult {
     cachedAnnotations: number;
     exportedFiles: number;
     briefPath: string;
+    digestCandidates: number;
+    digestMemos: number;
+    digestMessage: string;
+}
+/** Digest delivery result. */
+export interface CuboxDigestResult {
+    ok: boolean;
+    dest: string;
+    candidates: number;
+    memos: number;
+    delivered: number;
+    message: string;
 }
 /** Error carrying the route's JSON error message. */
 export declare class CuboxApiError extends Error {
@@ -51,5 +76,27 @@ export declare class CuboxApi {
         cancelled?: boolean;
         unsupported?: boolean;
         message?: string;
+    }>;
+    /** Push the annotation digest to flomo (respects the dedup ledger). */
+    pushFlomo(body?: {
+        days?: number;
+        force?: boolean;
+        tag?: string;
+    }): Promise<CuboxDigestResult>;
+    /** Push the annotation digest to the configured destination. */
+    pushDigest(body?: {
+        days?: number;
+        force?: boolean;
+        tag?: string;
+    }): Promise<CuboxDigestResult>;
+    /** Send a test memo to verify the flomo credential. */
+    testFlomo(): Promise<{
+        ok: boolean;
+        message: string;
+    }>;
+    /** Verify the Notion token + target page. */
+    testNotion(): Promise<{
+        ok: boolean;
+        message: string;
     }>;
 }

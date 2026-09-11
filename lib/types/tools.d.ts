@@ -15,10 +15,12 @@ export interface ToolContext {
 }
 /** Status tool: configuration + latest sync snapshot summary. */
 export declare function cuboxStatusTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
-/** Config tool: set/clear the API link, server, token, sync interval, export + AI options. */
+/** Config tool: set/clear credentials, sync interval, export, AI + digest options. */
 export declare function cuboxConfigTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
 /** Sync tool: pull the latest collection snapshot into the local cache. */
 export declare function cuboxSyncTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
+/** Flomo tool: push newly settled annotations to flomo as a daily digest. */
+export declare function cuboxFlomoTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
 /** Cards tool: query the collection with filters. */
 export declare function cuboxCardsTool(ctx: ToolContext): import("@deepseek-ai/dsh-tools").ToolDefinition;
 /** Build every cubox tool. */

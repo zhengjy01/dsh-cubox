@@ -41,7 +41,29 @@ export interface CuboxCredentials {
     llmModel: string;
     /** Prompt template for the daily brief; {collection} is replaced with the formatted collection. */
     llmPrompt: string;
+    /** Whether to export newly settled annotations as a digest after each sync. */
+    flomoEnabled: boolean;
+    /** Annotation digest destination. */
+    exportDest: ExportDest;
+    /** flomo tag appended to the digest (without leading #). */
+    flomoTag: string;
+    /** Minimum annotation age (minutes) before it may be pushed (avoid half-typed notes). */
+    flomoMinAgeMinutes: number;
+    /** Whether to run the digest through the LLM exportPrompt before delivery. */
+    usePrompt: boolean;
+    /** Digest prompt template; {digest} is replaced with the raw digest. */
+    exportPrompt: string;
+    /** Notion integration token (for exportDest=notion). */
+    notionToken: string;
+    /** Notion target parent page id or URL (for exportDest=notion). */
+    notionTargetPageId: string;
 }
+/** Annotation digest destination. */
+export type ExportDest = 'flomo' | 'local' | 'notion';
+/** Default flomo tag for the Cubox annotation digest. */
+export declare const DEFAULT_FLOMO_TAG = "AI/cubox";
+/** Default digest prompt template ({digest} placeholder). */
+export declare const DEFAULT_EXPORT_PROMPT: string;
 /** Default prompt for the daily collection brief. */
 export declare const DEFAULT_LLM_PROMPT: string;
 /** Public, secret-free status view. */
@@ -57,6 +79,14 @@ export interface CuboxConfigView {
     llmModel: string;
     llmKeyMasked: string;
     llmPrompt: string;
+    flomoEnabled: boolean;
+    exportDest: ExportDest;
+    flomoTag: string;
+    flomoMinAgeMinutes: number;
+    usePrompt: boolean;
+    exportPrompt: string;
+    notionConfigured: boolean;
+    notionTargetPageId: string;
     configPath: string;
 }
 /** Mask a credential for display, keeping only the head and tail. */
