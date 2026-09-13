@@ -10,7 +10,7 @@ Cubox sync for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harnes
 - **AI daily brief** — write your own prompt template (e.g. "今日收藏简报", `{collection}` is replaced with the formatted collection for the sync window: title / source / summary / annotations). When an LLM key is configured, every sync generates a brief into the output dir — `今日收藏简报-YYYY-MM-DD.md` for a 1-day sync, `最近N日收藏简报-YYYY-MM-DD.md` for wider windows (each window gets its own file).
 - **Markdown export** — set `outputDir` and optionally keep one markdown file per card (frontmatter + title + description + Cubox/original links + annotations, same layout as the official Cubox Obsidian plugin). Toggle `exportCards` off to write only the AI brief.
 - **Query** — `cubox_cards` filters by keyword, time window, annotated/starred/read status.
-- **flomo annotation sync** — after each sync, newly created / changed annotations (highlights + thoughts) are pushed to [flomo](https://flomoapp.com) as a daily digest (card title + link + annotations). It reuses the `~/.dsh/dsh-flomo.json` credentials (no new secret), keeps a **local dedup ledger** (`~/.dsh/.cubox-flomo-annotations-sent`) so nothing is pushed twice, only pushes annotations older than N minutes (default 60) to avoid half-typed notes, strips every `#` from the body (flomo turns `#word` into a tag) and appends only the configured tag, auto-splits long digests across memos, and can target `flomo` / local markdown / Notion with an optional LLM rewrite (`{digest}` prompt).
+- **flomo annotation sync** — after each sync, newly created / changed annotations (highlights + thoughts) are pushed to [flomo](https://flomoapp.com) as a daily digest (card title + link + annotations). It reuses the `~/.dsh/dsh-flomo.json` credentials (no new secret), keeps a **local dedup ledger** (`~/.dsh/.cubox-flomo-annotations-sent`) so nothing is pushed twice, only pushes annotations older than N minutes (default 60) to avoid half-typed notes, replaces every ASCII `#` in the body with the full-width `＃` (`#123` still reads as `＃123`; flomo only turns an ASCII `#word` into a tag) and appends only the configured tag, auto-splits long digests across memos, and can target `flomo` / local markdown / Notion with an optional LLM rewrite (`{digest}` prompt).
 - **Config & status** — `cubox_config` / `cubox_status` / `cubox_flomo`; credentials persist to `~/.dsh/dsh-cubox.json` (mode 0600), secrets never echoed.
 - **Settings panel** — Settings → Cubox: paste the API-extension link, set the sync interval, pick the local export folder (OS folder chooser), toggle per-card export, edit the AI brief prompt and LLM settings (OpenAI-compatible, defaults to DeepSeek), and configure / manually push the flomo annotation digest.
 
@@ -25,6 +25,8 @@ dsh plugin --profile web add link:/path/to/dsh-cubox
 ```
 
 Restart `dsh web`. The plugin ships pre-built — `lib/index.js` is plain ESM.
+
+Current release: **v0.2.0** ([Releases](https://github.com/zhengjy01/dsh-cubox/releases) · [npm](https://www.npmjs.com/package/dsh-cubox)).
 
 ## Configure
 
