@@ -21,6 +21,7 @@ export interface NativeDirectoryPicker {
 
 /** Route paths. */
 export const CUBOX_API = {
+  probe: '/api/dsh-cubox/probe',
   config: '/api/dsh-cubox/config',
   sync: '/api/dsh-cubox/sync',
   status: '/api/dsh-cubox/status',
@@ -114,6 +115,16 @@ export function makeRoutes(deps: RouteContext) {
   }
 
   return [
+    {
+      // Tiny liveness probe: the release-kit portability gate (and any external
+      // watcher) calls it to confirm the plugin really mounted. Read-only.
+      kind: 'exact' as const,
+      path: CUBOX_API.probe,
+      handler: (req: IncomingMessage, res: ServerResponse) => {
+        if (!guard(req, res, 'GET')) return
+        writeJson(res, 200, { ok: true, plugin: 'dsh-cubox' })
+      },
+    },
     {
       kind: 'exact' as const,
       path: CUBOX_API.config,

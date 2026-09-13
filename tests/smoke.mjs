@@ -117,9 +117,10 @@ console.log('\n[api]')
 // --------------------------------------------------------------- flomo
 console.log('\n[flomo]')
 {
-  const { stripHashTags, buildTaggedContent, resolveFlomoUrl, writeFlomoCredentials, flomoStatus } = mod
-  check('stripHashTags removes every #', stripHashTags('标题 #tag 与 #另一个，还有 C#') === '标题 tag 与 另一个，还有 C')
-  check('buildTaggedContent appends one tag', buildTaggedContent('正文 #x', 'AI/cubox') === '正文 x #AI/cubox')
+  const { escapeHashes, buildTaggedContent, resolveFlomoUrl, writeFlomoCredentials, flomoStatus } = mod
+  check('escapeHashes 把半角 # 换成全角 ＃（不删除）', escapeHashes('标题 #tag 与 #另一个，还有 C#') === '标题 ＃tag 与 ＃另一个，还有 C＃')
+  check('escapeHashes 后正文无半角 #', !escapeHashes('PR #91 与 #759').includes('#'))
+  check('buildTaggedContent appends one tag', buildTaggedContent('正文 #x', 'AI/cubox') === '正文 ＃x #AI/cubox')
   check('buildTaggedContent splits tag list', buildTaggedContent('正文', 'a, b') === '正文 #a #b')
   check('flomo unconfigured initially', (await resolveFlomoUrl()) === null)
   await writeFlomoCredentials({ webhookUrl: 'https://flomoapp.com/iwh/testtoken', apiKey: '' })

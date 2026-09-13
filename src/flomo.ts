@@ -152,17 +152,25 @@ export async function postMemo(url: string, content: string): Promise<FlomoSendR
 }
 
 /**
- * Strip every `#` from a memo body. flomo treats `#词` as a tag; Cubox card
- * titles / URLs / annotation text may contain `#`, so the body must be
- * hash-free and the only tag is the configured one (appended separately).
+ * Full-width number sign (U+FF03). It reads as a hash mark but is a different
+ * code point from the ASCII '#', so flomo's tag parser never turns it into a tag.
  */
-export function stripHashTags(content: string): string {
-  return (content || '').replace(/#/g, '')
+export const HASH_SAFE = '＃'
+
+/**
+ * Replace every ASCII `#` in a memo body with the full-width `＃`. flomo treats
+ * `#词` as a tag; Cubox card titles / URLs / annotation text may contain `#`, so
+ * the body must be hash-free while staying readable. Replacing rather than
+ * deleting keeps `#123` readable as `＃123`. The only ASCII-hash tags are the
+ * configured one(s), appended separately by buildTaggedContent.
+ */
+export function escapeHashes(content: string): string {
+  return (content || '').replace(/#/g, HASH_SAFE)
 }
 
 /** Append normalized #tags to a memo body. */
 export function buildTaggedContent(content: string, tags: string): string {
-  const body = stripHashTags(content).trim()
+  const body = escapeHashes(content).trim()
   const tagList = (tags || '').split(/[\s,，;；]+/).map((t) => t.trim().replace(/^#+/, '')).filter(Boolean)
   const suffix = tagList.map((t) => '#' + t).join(' ')
   return suffix ? body + ' ' + suffix : body

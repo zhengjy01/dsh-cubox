@@ -54,10 +54,17 @@ export interface FlomoSendResult {
  */
 export declare function postMemo(url: string, content: string): Promise<FlomoSendResult>;
 /**
- * Strip every `#` from a memo body. flomo treats `#词` as a tag; Cubox card
- * titles / URLs / annotation text may contain `#`, so the body must be
- * hash-free and the only tag is the configured one (appended separately).
+ * Full-width number sign (U+FF03). It reads as a hash mark but is a different
+ * code point from the ASCII '#', so flomo's tag parser never turns it into a tag.
  */
-export declare function stripHashTags(content: string): string;
+export declare const HASH_SAFE = "\uFF03";
+/**
+ * Replace every ASCII `#` in a memo body with the full-width `＃`. flomo treats
+ * `#词` as a tag; Cubox card titles / URLs / annotation text may contain `#`, so
+ * the body must be hash-free while staying readable. Replacing rather than
+ * deleting keeps `#123` readable as `＃123`. The only ASCII-hash tags are the
+ * configured one(s), appended separately by buildTaggedContent.
+ */
+export declare function escapeHashes(content: string): string;
 /** Append normalized #tags to a memo body. */
 export declare function buildTaggedContent(content: string, tags: string): string;

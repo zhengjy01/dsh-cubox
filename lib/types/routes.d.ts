@@ -19,6 +19,7 @@ export interface NativeDirectoryPicker {
 }
 /** Route paths. */
 export declare const CUBOX_API: {
+    readonly probe: "/api/dsh-cubox/probe";
     readonly config: "/api/dsh-cubox/config";
     readonly sync: "/api/dsh-cubox/sync";
     readonly status: "/api/dsh-cubox/status";
@@ -44,6 +45,10 @@ export interface RouteContext {
  * @returns the route list.
  */
 export declare function makeRoutes(deps: RouteContext): ({
+    kind: "exact";
+    path: "/api/dsh-cubox/probe";
+    handler: (req: IncomingMessage, res: ServerResponse) => void;
+} | {
     kind: "exact";
     path: "/api/dsh-cubox/config";
     handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;

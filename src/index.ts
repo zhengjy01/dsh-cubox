@@ -182,7 +182,7 @@ export {
   FLOMO_MAX_CHARS, DEFAULT_DIGEST_WINDOW_DAYS, DEFAULT_FLOMO_LEDGER_FILE,
   type FlomoLedger, type DigestResult, type DigestMemo, type DigestOptions,
 } from './digest.ts'
-export { resolveFlomoUrl, flomoConfigured, flomoStatus, readFlomoCredentials, writeFlomoCredentials, postMemo, buildTaggedContent, stripHashTags, flomoConfigPath, FLOMO_CONFIG_FILE, type FlomoStatusView, type FlomoCredentials } from './flomo.ts'
+export { resolveFlomoUrl, flomoConfigured, flomoStatus, readFlomoCredentials, writeFlomoCredentials, postMemo, buildTaggedContent, escapeHashes, HASH_SAFE, flomoConfigPath, FLOMO_CONFIG_FILE, type FlomoStatusView, type FlomoCredentials } from './flomo.ts'
 export { exportToNotion, testNotion, normalizeNotionPageId, toNotionBlocks, NOTION_API, NOTION_VERSION } from './notion.ts'
 export { chatComplete, llmConfigured, type LlmConfig } from './llm.ts'
 export { makeRoutes, CUBOX_API, type NativeDirectoryPicker } from './routes.ts'

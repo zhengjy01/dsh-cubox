@@ -53,7 +53,10 @@
     "bundle": "tsdown",
     "watch": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs",
+    "verify": "node scripts/portability.mjs --health /api/dsh-cubox/probe",
+    "verify:full": "node scripts/portability.mjs --health /api/dsh-cubox/probe --stability 30",
+    "verify:quick": "node scripts/portability.mjs --skip-audit --stability 5 --health /api/dsh-cubox/probe"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
