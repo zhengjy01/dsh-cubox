@@ -10,25 +10,24 @@
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import path from 'node:path'
 
+import { pluginPath } from './home.ts'
+
 /** Default machine-wide config location (mode 0600). */
-export const DEFAULT_CONFIG_FILE = path.join(homedir(), '.dsh', 'dsh-cubox.json')
+export const DEFAULT_CONFIG_FILE = pluginPath(undefined, 'dsh-cubox.json')
 
 /** Default sync cache location (mode 0600). */
-export const DEFAULT_CACHE_FILE = path.join(homedir(), '.dsh', 'dsh-cubox-cache.json')
+export const DEFAULT_CACHE_FILE = pluginPath(undefined, 'dsh-cubox-cache.json')
 
-/** Test override for the config location. */
+/** Config location: DSH_CUBOX_CONFIG → DSH_HOME → ~/.dsh (mode 0600). */
 export function configPath(): string {
-  const override = process.env.DSH_CUBOX_CONFIG
-  return override !== undefined && override !== '' ? override : DEFAULT_CONFIG_FILE
+  return pluginPath(process.env.DSH_CUBOX_CONFIG, 'dsh-cubox.json')
 }
 
-/** Test override for the cache location. */
+/** Cache location: DSH_CUBOX_CACHE → DSH_HOME → ~/.dsh (mode 0600). */
 export function cachePath(): string {
-  const override = process.env.DSH_CUBOX_CACHE
-  return override !== undefined && override !== '' ? override : DEFAULT_CACHE_FILE
+  return pluginPath(process.env.DSH_CUBOX_CACHE, 'dsh-cubox-cache.json')
 }
 
 /** Cubox server instances. */

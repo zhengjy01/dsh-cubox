@@ -37,9 +37,9 @@ export const CUBOX_GUIDANCE =
   '本机已安装 dsh-cubox 插件（Cubox 收藏同步）：配置一次 Cubox API 扩展链接（偏好设置 → 扩展中心和自动化 → API 扩展 → 启用并复制链接，形如 https://cubox.pro/c/api/save/xxxx）后，' +
   '可用 cubox_sync 同步收藏（默认拉取今天，可 days 指定最近 N 天；若配置了 outputDir 导出目录，会按配置导出——exportCards 开启时每张收藏一个 md 文件，配置了 LLM 时按 llmPrompt 生成今日收藏简报写入该目录）、' +
   'cubox_cards 按关键词/时间/标注状态查询收藏，cubox_flomo 把新增/变更标注以每日 digest 推送到 flomo，cubox_config / cubox_status 配置与查看状态。' +
-  '标注 digest：flomoEnabled 开启后每次同步自动推送新标注（目标 exportDest=flomo/local/notion，标签 flomoTag 默认 AI/cubox，只推创建满 flomoMinAgeMinutes 分钟的标注，可用 usePrompt 让 LLM 先整理）；flomo 凭据复用 ~/.dsh/dsh-flomo.json，本地去重账本 ~/.dsh/.cubox-flomo-annotations-sent 防重复，正文自动去 #。' +
+  '标注 digest：flomoEnabled 开启后每次同步自动推送新标注（目标 exportDest=flomo/local/notion，标签 flomoTag 默认 AI/cubox，只推创建满 flomoMinAgeMinutes 分钟的标注，可用 usePrompt 让 LLM 先整理）；flomo 凭据复用 DSH_HOME 下的 dsh-flomo.json（默认 ~/.dsh/dsh-flomo.json），本地去重账本 ~/.dsh/.cubox-flomo-annotations-sent 防重复，正文自动去 #。' +
   '插件支持定时同步（配置 syncMinutes；推送 flomo 建议 60–120 分钟，0 关闭）。' +
-  '凭据存 ~/.dsh/dsh-cubox.json（权限 0600），同步快照存 ~/.dsh/dsh-cubox-cache.json；cubox_status 不回显完整 token 与 LLM key。' +
+  '凭据与同步快照存在 DSH_HOME 下（dsh-cubox.json / dsh-cubox-cache.json，权限 0600；DSH_HOME 默认 ~/.dsh，搬迁过 home 的机器按 DSH_HOME 走）；cubox_status 不回显完整 token 与 LLM key。' +
   '也可在 Web 设置页「Cubox」面板中配置、选择导出目录、编辑 AI 简报 prompt、配置 flomo 标注同步与手动同步。用户提到「cubox / 收藏 / 稍后读 / 收录」时即指本插件，请据此协作。'
 
 /** Plugin config, read from the composition row. */
@@ -171,6 +171,7 @@ export function apply(ctx: Context, config?: Config): void {
 }
 
 /** Re-exports for host consumers and the smoke tests. */
+export { dshHome, pluginPath } from './home.ts'
 export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, DEFAULT_FLOMO_TAG, DEFAULT_EXPORT_PROMPT, type CuboxConfigView, type CuboxCredentials, type ExportDest } from './store.ts'
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts'
 export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, cuboxFlomoTool, buildTools, type ToolContext } from './tools.ts'

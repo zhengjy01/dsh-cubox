@@ -15,11 +15,11 @@
 
 import { createHash } from 'node:crypto'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import type { CuboxAnnotation, CuboxCard } from './api.ts'
 import type { CuboxCache } from './sync.ts'
 import type { CuboxCredentials, ExportDest } from './store.ts'
+import { pluginPath } from './home.ts'
 import { chatComplete, llmConfigured } from './llm.ts'
 import { buildTaggedContent, postMemo, resolveFlomoUrl } from './flomo.ts'
 import { exportToNotion } from './notion.ts'
@@ -31,12 +31,11 @@ export const FLOMO_MAX_CHARS = 1800
 export const DEFAULT_DIGEST_WINDOW_DAYS = 2
 
 /** Machine-wide dedup ledger (JSON map id → content hash, mode 0600). */
-export const DEFAULT_FLOMO_LEDGER_FILE = path.join(homedir(), '.dsh', '.cubox-flomo-annotations-sent')
+export const DEFAULT_FLOMO_LEDGER_FILE = pluginPath(undefined, '.cubox-flomo-annotations-sent')
 
-/** Test override for the dedup ledger location. */
+/** Ledger location: DSH_CUBOX_FLOMO_LEDGER → DSH_HOME → ~/.dsh. */
 export function flomoLedgerPath(): string {
-  const override = process.env.DSH_CUBOX_FLOMO_LEDGER
-  return override !== undefined && override !== '' ? override : DEFAULT_FLOMO_LEDGER_FILE
+  return pluginPath(process.env.DSH_CUBOX_FLOMO_LEDGER, '.cubox-flomo-annotations-sent')
 }
 
 /** Dedup ledger shape: annotation id → content hash. */

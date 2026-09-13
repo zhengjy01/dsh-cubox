@@ -35,6 +35,7 @@ export interface Config {
  */
 export declare function apply(ctx: Context, config?: Config): void;
 /** Re-exports for host consumers and the smoke tests. */
+export { dshHome, pluginPath } from './home.ts';
 export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, DEFAULT_FLOMO_TAG, DEFAULT_EXPORT_PROMPT, type CuboxConfigView, type CuboxCredentials, type ExportDest } from './store.ts';
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts';
 export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, cuboxFlomoTool, buildTools, type ToolContext } from './tools.ts';

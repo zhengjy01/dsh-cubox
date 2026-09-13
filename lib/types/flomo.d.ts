@@ -14,7 +14,7 @@
  */
 /** Config file location shared with dsh-flomo (machine-wide, mode 0600). */
 export declare const FLOMO_CONFIG_FILE: string;
-/** Test override for the shared flomo config location. */
+/** Shared flomo config location: DSH_CUBOX_FLOMO_CONFIG → DSH_HOME → ~/.dsh. */
 export declare function flomoConfigPath(): string;
 /** Persisted flomo credential shape (read-only from cubox's side). */
 export interface FlomoCredentials {

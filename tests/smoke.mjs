@@ -375,6 +375,43 @@ console.log('\n[apply]')
   check('panel interval save persisted to view', second.status === 200 && JSON.parse(second.body).syncMinutes === 17, second.body)
 }
 
+// ------------------------------------------------------- home resolution
+// The portability checklist requires: plugin override → DSH_HOME → ~/.dsh.
+// This asserts the middle layer (a launcher / rescue capsule may relocate home).
+console.log('\n[home]')
+{
+  const { dshHome, configPath, cachePath, flomoConfigPath, flomoLedgerPath } = mod
+  const saved = {
+    DSH_HOME: process.env.DSH_HOME,
+    DSH_CUBOX_CONFIG: process.env.DSH_CUBOX_CONFIG,
+    DSH_CUBOX_CACHE: process.env.DSH_CUBOX_CACHE,
+    DSH_CUBOX_FLOMO_CONFIG: process.env.DSH_CUBOX_FLOMO_CONFIG,
+    DSH_CUBOX_FLOMO_LEDGER: process.env.DSH_CUBOX_FLOMO_LEDGER,
+  }
+  const put = (key, value) => {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  const fakeHome = path.join(tmp, 'relocated-dsh-home')
+  process.env.DSH_HOME = fakeHome
+  delete process.env.DSH_CUBOX_CONFIG
+  delete process.env.DSH_CUBOX_CACHE
+  delete process.env.DSH_CUBOX_FLOMO_CONFIG
+  delete process.env.DSH_CUBOX_FLOMO_LEDGER
+  check('dshHome() honors DSH_HOME', dshHome() === fakeHome, dshHome())
+  check('configPath() falls back under DSH_HOME', configPath() === path.join(fakeHome, 'dsh-cubox.json'), configPath())
+  check('cachePath() falls back under DSH_HOME', cachePath() === path.join(fakeHome, 'dsh-cubox-cache.json'), cachePath())
+  check('flomoConfigPath() falls back under DSH_HOME', flomoConfigPath() === path.join(fakeHome, 'dsh-flomo.json'), flomoConfigPath())
+  check('flomoLedgerPath() falls back under DSH_HOME', flomoLedgerPath() === path.join(fakeHome, '.cubox-flomo-annotations-sent'), flomoLedgerPath())
+  process.env.DSH_CUBOX_CONFIG = saved.DSH_CUBOX_CONFIG
+  check('plugin override still wins over DSH_HOME', configPath() === saved.DSH_CUBOX_CONFIG, configPath())
+  put('DSH_HOME', saved.DSH_HOME)
+  put('DSH_CUBOX_CONFIG', saved.DSH_CUBOX_CONFIG)
+  put('DSH_CUBOX_CACHE', saved.DSH_CUBOX_CACHE)
+  put('DSH_CUBOX_FLOMO_CONFIG', saved.DSH_CUBOX_FLOMO_CONFIG)
+  put('DSH_CUBOX_FLOMO_LEDGER', saved.DSH_CUBOX_FLOMO_LEDGER)
+}
+
 rmSync(tmp, { recursive: true, force: true })
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`))
 process.exit(failures === 0 ? 0 : 1)

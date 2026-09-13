@@ -21,7 +21,7 @@ export declare const FLOMO_MAX_CHARS = 1800;
 export declare const DEFAULT_DIGEST_WINDOW_DAYS = 2;
 /** Machine-wide dedup ledger (JSON map id → content hash, mode 0600). */
 export declare const DEFAULT_FLOMO_LEDGER_FILE: string;
-/** Test override for the dedup ledger location. */
+/** Ledger location: DSH_CUBOX_FLOMO_LEDGER → DSH_HOME → ~/.dsh. */
 export declare function flomoLedgerPath(): string;
 /** Dedup ledger shape: annotation id → content hash. */
 export type FlomoLedger = Record<string, string>;

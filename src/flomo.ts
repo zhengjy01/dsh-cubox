@@ -14,16 +14,16 @@
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import path from 'node:path'
 
-/** Config file location shared with dsh-flomo (machine-wide, mode 0600). */
-export const FLOMO_CONFIG_FILE = path.join(homedir(), '.dsh', 'dsh-flomo.json')
+import { pluginPath } from './home.ts'
 
-/** Test override for the shared flomo config location. */
+/** Config file location shared with dsh-flomo (machine-wide, mode 0600). */
+export const FLOMO_CONFIG_FILE = pluginPath(undefined, 'dsh-flomo.json')
+
+/** Shared flomo config location: DSH_CUBOX_FLOMO_CONFIG → DSH_HOME → ~/.dsh. */
 export function flomoConfigPath(): string {
-  const override = process.env.DSH_CUBOX_FLOMO_CONFIG
-  return override !== undefined && override !== '' ? override : FLOMO_CONFIG_FILE
+  return pluginPath(process.env.DSH_CUBOX_FLOMO_CONFIG, 'dsh-flomo.json')
 }
 
 /** Newer apiKey-format endpoint prefix (mirrors dsh-flomo). */
@@ -101,7 +101,7 @@ export async function resolveFlomoUrl(): Promise<string | null> {
   return (await loadFlomoCredentials()).resolved
 }
 
-/** Read ~/.dsh/dsh-flomo.json and resolve the request URL. */
+/** Read the shared flomo config (under DSH_HOME, default ~/.dsh) and resolve the request URL. */
 async function loadFlomoCredentials(): Promise<{ resolved: string | null }> {
   const creds = await readFlomoCredentials()
   const webhook = creds.webhookUrl.trim()

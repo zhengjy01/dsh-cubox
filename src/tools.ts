@@ -85,7 +85,7 @@ export function cuboxStatusTool(ctx: ToolContext) {
         '卡片导出：' + (view.exportCards ? '开（每张收藏一个 md）' : '关'),
         'AI 简报：' + (view.llmKeyMasked !== '' ? '已配置（' + view.llmModel + '，' + view.llmBaseUrl + '，key ' + view.llmKeyMasked + '）' : '未配置'),
         '标注 digest：' + (view.flomoEnabled ? '已开启（目标 ' + destLabel + '，标签 #' + view.flomoTag + '，最短等待 ' + view.flomoMinAgeMinutes + ' 分钟' + (view.usePrompt ? '，LLM 整理' : '') + '）' : '未开启（cubox_config flomoEnabled=true 开启）'),
-        'flomo 凭据：' + (flomoOk ? '已配置（共享 ~/.dsh/dsh-flomo.json）' : '未配置'),
+        'flomo 凭据：' + (flomoOk ? '已配置（共享 DSH_HOME 下的 dsh-flomo.json）' : '未配置'),
         '已推送标注：' + Object.keys(ledger).length + ' 条（本地去重账本）',
         '配置路径：' + view.configPath,
       ]
@@ -143,7 +143,7 @@ function configToolFields(view: CuboxConfigView) {
 export function cuboxConfigTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_config',
-    description: '配置或清除 Cubox API 扩展凭据与同步/导出选项。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时；推送 flomo 建议 60–120）。outputDir 为本地导出目录；exportCards 控制是否每张收藏导出一个 md。llmBaseUrl / llmApiKey / llmModel 配置 LLM（AI 简报与 prompt 整理共用）；llmPrompt 为 AI 简报模板（{collection}）。标注 digest：flomoEnabled 开启同步后推送新增/变更标注；exportDest 选目标（flomo/local/notion）；flomoTag 为 flomo 标签（默认 AI/cubox）；flomoMinAgeMinutes 为标注最短等待分钟数（默认 60，避免半截内容）；usePrompt + exportPrompt（{digest}）让 LLM 先整理再推送；notionToken / notionTargetPageId 供 exportDest=notion。reset: true 清除全部凭据。凭据持久化到 ~/.dsh/dsh-cubox.json（0600），flomo 凭据共享 ~/.dsh/dsh-flomo.json。',
+    description: '配置或清除 Cubox API 扩展凭据与同步/导出选项。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时；推送 flomo 建议 60–120）。outputDir 为本地导出目录；exportCards 控制是否每张收藏导出一个 md。llmBaseUrl / llmApiKey / llmModel 配置 LLM（AI 简报与 prompt 整理共用）；llmPrompt 为 AI 简报模板（{collection}）。标注 digest：flomoEnabled 开启同步后推送新增/变更标注；exportDest 选目标（flomo/local/notion）；flomoTag 为 flomo 标签（默认 AI/cubox）；flomoMinAgeMinutes 为标注最短等待分钟数（默认 60，避免半截内容）；usePrompt + exportPrompt（{digest}）让 LLM 先整理再推送；notionToken / notionTargetPageId 供 exportDest=notion。reset: true 清除全部凭据。凭据持久化到 DSH_HOME 下的 dsh-cubox.json（默认 ~/.dsh/dsh-cubox.json，0600），flomo 凭据共享 DSH_HOME 下的 dsh-flomo.json（默认 ~/.dsh/dsh-flomo.json）。',
     parameters: {
       apiLink: { type: 'string', description: '完整 API 扩展链接（https://cubox.pro/c/api/save/xxxx 或 https://cubox.cc/c/api/save/xxxx）' },
       server: { type: 'string', description: '服务器：cubox.pro（国内）或 cubox.cc（国际版）' },
@@ -231,7 +231,7 @@ export function cuboxConfigTool(ctx: ToolContext) {
 export function cuboxSyncTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_sync',
-    description: '同步 Cubox：拉取最近 N 天（默认今天）的收藏卡片与今日标注，合并进本地缓存（~/.dsh/dsh-cubox-cache.json），并更新最近同步时间。若配置了 outputDir 导出目录，会按配置导出：exportCards 开启时每张收藏一个 md 文件；配置了 LLM 时按 llmPrompt 生成今日收藏简报（今日收藏简报-YYYY-MM-DD.md）写入该目录。若开启了 flomoEnabled，还会把新增/变更且创建满 N 分钟的标注以每日 digest 推送到 exportDest（flomo/local/notion；本地去重账本防重复）。days 控制拉取窗口天数；limit 控制卡片拉取上限（默认 200）。返回本次拉取、缓存规模与导出结果。',
+    description: '同步 Cubox：拉取最近 N 天（默认今天）的收藏卡片与今日标注，合并进本地缓存（DSH_HOME 下的 dsh-cubox-cache.json，默认 ~/.dsh/dsh-cubox-cache.json），并更新最近同步时间。若配置了 outputDir 导出目录，会按配置导出：exportCards 开启时每张收藏一个 md 文件；配置了 LLM 时按 llmPrompt 生成今日收藏简报（今日收藏简报-YYYY-MM-DD.md）写入该目录。若开启了 flomoEnabled，还会把新增/变更且创建满 N 分钟的标注以每日 digest 推送到 exportDest（flomo/local/notion；本地去重账本防重复）。days 控制拉取窗口天数；limit 控制卡片拉取上限（默认 200）。返回本次拉取、缓存规模与导出结果。',
     parameters: {
       days: { type: 'number', description: '拉取窗口天数（默认 1 = 今天）' },
       limit: { type: 'number', description: '卡片拉取上限（默认 200）' },
@@ -288,7 +288,7 @@ export function cuboxSyncTool(ctx: ToolContext) {
 export function cuboxFlomoTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_flomo',
-    description: '把 Cubox 新增/变更的标注（划线+想法）以每日 digest（卡片标题+链接+标注）推送到 flomo（浮墨笔记）。复用 ~/.dsh/dsh-flomo.json 凭据（无需重复配置）；本地去重账本（~/.dsh/.cubox-flomo-annotations-sent）保证同一标注不重复推送；默认只推创建满 N 分钟（配置 flomoMinAgeMinutes，默认 60）的标注，避免半截内容；正文自动去除 #（flomo 会把 #词 抓成标签），只保留配置标签；超长自动拆成多条 MEMO。days 指定回看窗口天数（默认 2）；force=true 忽略最短等待时间（手动补推）；tag 覆盖配置标签。',
+    description: '把 Cubox 新增/变更的标注（划线+想法）以每日 digest（卡片标题+链接+标注）推送到 flomo（浮墨笔记）。复用 DSH_HOME 下的 dsh-flomo.json 凭据（默认 ~/.dsh/dsh-flomo.json，无需重复配置）；本地去重账本（DSH_HOME 下的 .cubox-flomo-annotations-sent）保证同一标注不重复推送；默认只推创建满 N 分钟（配置 flomoMinAgeMinutes，默认 60）的标注，避免半截内容；正文自动去除 #（flomo 会把 #词 抓成标签），只保留配置标签；超长自动拆成多条 MEMO。days 指定回看窗口天数（默认 2）；force=true 忽略最短等待时间（手动补推）；tag 覆盖配置标签。',
     parameters: {
       days: { type: 'number', description: '回看窗口天数（默认 2）' },
       force: { type: 'boolean', description: '忽略最短等待时间，立即推送（仍受去重账本约束）' },

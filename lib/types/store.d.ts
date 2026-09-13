@@ -12,9 +12,9 @@
 export declare const DEFAULT_CONFIG_FILE: string;
 /** Default sync cache location (mode 0600). */
 export declare const DEFAULT_CACHE_FILE: string;
-/** Test override for the config location. */
+/** Config location: DSH_CUBOX_CONFIG → DSH_HOME → ~/.dsh (mode 0600). */
 export declare function configPath(): string;
-/** Test override for the cache location. */
+/** Cache location: DSH_CUBOX_CACHE → DSH_HOME → ~/.dsh (mode 0600). */
 export declare function cachePath(): string;
 /** Cubox server instances. */
 export type CuboxServer = 'cubox.pro' | 'cubox.cc';
