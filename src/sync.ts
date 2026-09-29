@@ -10,12 +10,15 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { CuboxApi, CuboxCard, CuboxAnnotation } from './api.ts'
 import { todayRange } from './api.ts'
 import type { CuboxStore } from './store.ts'
-import { cachePath } from './store.ts'
+import { cachePath, type CuboxCredentials } from './store.ts'
 import { chatComplete, llmConfigured, type LlmConfig } from './llm.ts'
-import { deliverAnnotationDigest, type DigestResult } from './digest.ts'
+import { chunkText, deliverAnnotationDigest, FLOMO_MAX_CHARS, type DigestResult } from './digest.ts'
+import { buildTaggedContent, postMemo, resolveFlomoUrl } from './flomo.ts'
+import { pluginPath } from './home.ts'
 
 /** Sync snapshot persisted to the cache file. */
 export interface CuboxCache {
@@ -43,6 +46,10 @@ export interface SyncResult {
   digestMemos: number
   /** Human-readable digest delivery message ('' = not attempted). */
   digestMessage: string
+  /** Memos sent for the daily brief push (0 = not attempted/skipped). */
+  briefFlomoMemos: number
+  /** Human-readable brief-push message, including the skip reason ('' = not attempted). */
+  briefFlomoMessage: string
 }
 
 /** Parse the cache file (missing/unreadable → empty). */
@@ -160,6 +167,18 @@ export async function doSync(
     }
   }
 
+  // Daily-brief push: the same brief also goes to flomo (at most one memo per
+  // local day), so a day with saves but no highlights still yields a report.
+  // Independent from the annotation digest below — own gate, own ledger.
+  let briefPush: BriefPushResult | null = null
+  if (cfg.briefFlomoEnabled && briefPath !== '') {
+    try {
+      briefPush = await deliverDailyBrief(cache, cfg, briefPath)
+    } catch (briefPushError) {
+      warnings.push('简报推送失败：' + String(briefPushError instanceof Error ? briefPushError.message : briefPushError))
+    }
+  }
+
   // Annotation digest: push newly settled/changed annotations to the configured
   // target (flomo by default). Gated by flomoEnabled; the local dedup ledger
   // prevents re-pushing. Failures degrade gracefully (snapshot is already saved).
@@ -177,6 +196,7 @@ export async function doSync(
     '缓存现有卡片 ' + mergedCards.length + ' 条、标注 ' + mergedAnnotations.length + ' 条。' +
     (exportedFiles > 0 ? '已导出 ' + exportedFiles + ' 个收藏 Markdown 到 ' + outputDir.trim() : '') +
     (briefPath !== '' ? '已生成简报：' + briefPath : '') +
+    (briefPush !== null && !briefPush.skipped ? '简报推送：' + briefPush.message : '') +
     (digest !== null && digest.candidates > 0 ? '标注 digest：' + digest.message : '') +
     (warnings.length > 0 ? '\n警告：' + warnings.join('；') : '')
   return {
@@ -192,6 +212,8 @@ export async function doSync(
     digestCandidates: digest?.candidates ?? 0,
     digestMemos: digest?.memos ?? 0,
     digestMessage: digest?.message ?? '',
+    briefFlomoMemos: briefPush?.memos ?? 0,
+    briefFlomoMessage: briefPush?.message ?? '',
   }
 }
 
@@ -275,6 +297,151 @@ export async function writeDailyBrief(
   await mkdir(outputDir, { recursive: true })
   await writeFile(filePath, content + '\n')
   return filePath
+}
+
+/** Machine-wide per-day ledger for the brief push (JSON map date → content hash, 0600). */
+export const DEFAULT_BRIEF_LEDGER_FILE = pluginPath(undefined, '.cubox-flomo-brief-sent')
+
+/** Ledger location: DSH_CUBOX_BRIEF_LEDGER → DSH_HOME → ~/.dsh. */
+export function briefLedgerPath(): string {
+  return pluginPath(process.env.DSH_CUBOX_BRIEF_LEDGER, '.cubox-flomo-brief-sent')
+}
+
+/** Ledger shape: local date key (YYYY-MM-DD) → hash of what was pushed. */
+type BriefLedger = Record<string, string>
+
+/** Read the brief-push ledger (missing/unreadable → empty). */
+async function readBriefLedger(): Promise<BriefLedger> {
+  try {
+    const raw = await readFile(briefLedgerPath(), 'utf8')
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const out: BriefLedger = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'string') out[key] = value
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** Write the brief-push ledger (mode 0600). */
+async function writeBriefLedger(ledger: BriefLedger): Promise<void> {
+  await mkdir(path.dirname(briefLedgerPath()), { recursive: true })
+  await writeFile(briefLedgerPath(), JSON.stringify(ledger, null, 2), { mode: 0o600 })
+}
+
+/** Outcome of one daily-brief push attempt. */
+export interface BriefPushResult {
+  ok: boolean
+  /** True when a gate (time / no cards / already pushed / disabled) skipped the push. */
+  skipped: boolean
+  memos: number
+  delivered: number
+  message: string
+}
+
+/** Local date key (YYYY-MM-DD) in the host timezone. */
+function briefDateKey(date: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+}
+
+/** Short content hash recorded in the ledger. */
+function briefHash(content: string): string {
+  return createHash('sha1').update(content).digest('hex').slice(0, 16)
+}
+
+/**
+ * Push the day's collection brief (the LLM brief already written to outputDir)
+ * to flomo. Separate from the annotation digest: this is the "collected
+ * something today → there is a daily report" path, so days without highlights
+ * still get one.
+ *
+ * At most one push per local day — gates in order: enabled → a brief file
+ * exists → the hour gate (briefFlomoHour, 0 = no gate) → the day actually has
+ * cards → the per-day ledger. A skipped gate is a normal outcome, not an
+ * error, so a 120-minute sync loop stays quiet.
+ */
+export async function deliverDailyBrief(
+  cache: CuboxCache,
+  config: CuboxCredentials,
+  briefPath: string,
+  opts: { now?: Date; force?: boolean } = {},
+): Promise<BriefPushResult> {
+  const now = opts.now ?? new Date()
+  const skip = (message: string): BriefPushResult => ({ ok: true, skipped: true, memos: 0, delivered: 0, message })
+
+  if (!config.briefFlomoEnabled) return skip('未开启「每日简报推送」（briefFlomoEnabled=false）。')
+  if (briefPath === '') return skip('今日未生成简报（需要配置输出目录与 LLM）。')
+  if (opts.force !== true && config.briefFlomoHour > 0 && now.getHours() < config.briefFlomoHour) {
+    return skip('未到推送时间（' + config.briefFlomoHour + ':00 之后才推，避免推半截简报）。')
+  }
+
+  const key = briefDateKey(now)
+  const todayCards = cache.cards.filter((c) => (c.create_time ?? '').slice(0, 10) === key)
+  if (todayCards.length === 0) return skip('今日没有收藏，不推简报。')
+
+  const ledger = await readBriefLedger()
+  if (opts.force !== true && ledger[key] !== undefined) return skip('今日简报已推送过（每天一条）。')
+
+  let content = ''
+  try {
+    content = await readFile(briefPath, 'utf8')
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: false,
+      memos: 0,
+      delivered: 0,
+      message: '读取简报文件失败：' + String(error instanceof Error ? error.message : error),
+    }
+  }
+  if (content.trim() === '') return skip('简报内容为空，不推。')
+
+  const url = await resolveFlomoUrl()
+  if (url === null) {
+    return {
+      ok: false,
+      skipped: false,
+      memos: 0,
+      delivered: 0,
+      message: 'flomo 未配置：请在设置面板「Flomo」区填写 API URL / API Key。',
+    }
+  }
+
+  const tag = config.flomoTag
+  const memos = chunkText(content, FLOMO_MAX_CHARS, '📥 Cubox 收藏简报 · ' + key)
+  let sent = 0
+  for (const memo of memos) {
+    let result: { ok: boolean } = { ok: false }
+    try {
+      // buildTaggedContent escapes every ASCII '#' — flomo would turn them into tags.
+      result = await postMemo(url, buildTaggedContent(memo, tag))
+    } catch {
+      result = { ok: false }
+    }
+    if (result.ok) sent += 1
+  }
+  if (sent === 0) {
+    return {
+      ok: false,
+      skipped: false,
+      memos: memos.length,
+      delivered: 0,
+      message: 'flomo 推送失败：' + memos.length + ' 条 MEMO 全部失败（下次同步会重试）。',
+    }
+  }
+  ledger[key] = briefHash(content)
+  await writeBriefLedger(ledger)
+  return {
+    ok: true,
+    skipped: false,
+    memos: memos.length,
+    delivered: sent,
+    message: '已推送今日收藏简报（' + todayCards.length + ' 条收藏）到 flomo（#' + tag + '）：' + sent + ' 条 MEMO。',
+  }
 }
 
 /** Local time in the Cubox API layout (no tz-aware dependency). */

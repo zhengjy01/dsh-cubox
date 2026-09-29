@@ -61,6 +61,8 @@ export function cuboxStatusTool(ctx: ToolContext) {
           flomoTag: { type: 'string' },
           flomoMinAgeMinutes: { type: 'number' },
           usePrompt: { type: 'boolean' },
+          briefFlomoEnabled: { type: 'boolean' },
+          briefFlomoHour: { type: 'number' },
           flomoConfigured: { type: 'boolean' },
           sentAnnotationCount: { type: 'number' },
           configPath: { type: 'string' },
@@ -85,6 +87,7 @@ export function cuboxStatusTool(ctx: ToolContext) {
         '卡片导出：' + (view.exportCards ? '开（每张收藏一个 md）' : '关'),
         'AI 简报：' + (view.llmKeyMasked !== '' ? '已配置（' + view.llmModel + '，' + view.llmBaseUrl + '，key ' + view.llmKeyMasked + '）' : '未配置'),
         '标注 digest：' + (view.flomoEnabled ? '已开启（目标 ' + destLabel + '，标签 #' + view.flomoTag + '，最短等待 ' + view.flomoMinAgeMinutes + ' 分钟' + (view.usePrompt ? '，LLM 整理' : '') + '）' : '未开启（cubox_config flomoEnabled=true 开启）'),
+        '每日简报推送：' + (view.briefFlomoEnabled ? '已开启（每天一条 ' + (view.briefFlomoHour > 0 ? view.briefFlomoHour + ':00 之后推' : '有收藏即推') + '，标签 #' + view.flomoTag + '）' : '未开启（cubox_config briefFlomoEnabled=true 开启）'),
         'flomo 凭据：' + (flomoOk ? '已配置（共享 DSH_HOME 下的 dsh-flomo.json）' : '未配置'),
         '已推送标注：' + Object.keys(ledger).length + ' 条（本地去重账本）',
         '配置路径：' + view.configPath,
@@ -107,6 +110,8 @@ export function cuboxStatusTool(ctx: ToolContext) {
         flomoTag: view.flomoTag,
         flomoMinAgeMinutes: view.flomoMinAgeMinutes,
         usePrompt: view.usePrompt,
+        briefFlomoEnabled: view.briefFlomoEnabled,
+        briefFlomoHour: view.briefFlomoHour,
         flomoConfigured: flomoOk,
         sentAnnotationCount: Object.keys(ledger).length,
         configPath: view.configPath,
@@ -133,6 +138,8 @@ function configToolFields(view: CuboxConfigView) {
     flomoTag: view.flomoTag,
     flomoMinAgeMinutes: view.flomoMinAgeMinutes,
     usePrompt: view.usePrompt,
+    briefFlomoEnabled: view.briefFlomoEnabled,
+    briefFlomoHour: view.briefFlomoHour,
     notionConfigured: view.notionConfigured,
     notionTargetPageId: view.notionTargetPageId,
     configPath: view.configPath,
@@ -143,7 +150,7 @@ function configToolFields(view: CuboxConfigView) {
 export function cuboxConfigTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_config',
-    description: '配置或清除 Cubox API 扩展凭据与同步/导出选项。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时；推送 flomo 建议 60–120）。outputDir 为本地导出目录；exportCards 控制是否每张收藏导出一个 md。llmBaseUrl / llmApiKey / llmModel 配置 LLM（AI 简报与 prompt 整理共用）；llmPrompt 为 AI 简报模板（{collection}）。标注 digest：flomoEnabled 开启同步后推送新增/变更标注；exportDest 选目标（flomo/local/notion）；flomoTag 为 flomo 标签（默认 AI/cubox）；flomoMinAgeMinutes 为标注最短等待分钟数（默认 60，避免半截内容）；usePrompt + exportPrompt（{digest}）让 LLM 先整理再推送；notionToken / notionTargetPageId 供 exportDest=notion。reset: true 清除全部凭据。凭据持久化到 DSH_HOME 下的 dsh-cubox.json（默认 ~/.dsh/dsh-cubox.json，0600），flomo 凭据共享 DSH_HOME 下的 dsh-flomo.json（默认 ~/.dsh/dsh-flomo.json）。',
+    description: '配置或清除 Cubox API 扩展凭据与同步/导出选项。apiLink 填完整 API 扩展链接（形如 https://cubox.pro/c/api/save/xxxx，自动解析 server 与 token）；也可分别填 server（cubox.pro / cubox.cc）与 token。syncMinutes 为定时同步间隔（分钟，0=关闭定时；推送 flomo 建议 60–120）。outputDir 为本地导出目录；exportCards 控制是否每张收藏导出一个 md。llmBaseUrl / llmApiKey / llmModel 配置 LLM（AI 简报与 prompt 整理共用）；llmPrompt 为 AI 简报模板（{collection}）。标注 digest：flomoEnabled 开启同步后推送新增/变更标注；exportDest 选目标（flomo/local/notion）；flomoTag 为 flomo 标签（默认 AI/cubox）；flomoMinAgeMinutes 为标注最短等待分钟数（默认 60，避免半截内容）；usePrompt + exportPrompt（{digest}）让 LLM 先整理再推送；notionToken / notionTargetPageId 供 exportDest=notion。每日简报推送：briefFlomoEnabled 开启后，当天有收藏时把「今日收藏简报」也推一份到 flomo（每天最多一条，独立去重账本；briefFlomoHour 控制最早推送时刻、0=有收藏即推）。reset: true 清除全部凭据。凭据持久化到 DSH_HOME 下的 dsh-cubox.json（默认 ~/.dsh/dsh-cubox.json，0600），flomo 凭据共享 DSH_HOME 下的 dsh-flomo.json（默认 ~/.dsh/dsh-flomo.json）。',
     parameters: {
       apiLink: { type: 'string', description: '完整 API 扩展链接（https://cubox.pro/c/api/save/xxxx 或 https://cubox.cc/c/api/save/xxxx）' },
       server: { type: 'string', description: '服务器：cubox.pro（国内）或 cubox.cc（国际版）' },
@@ -163,6 +170,8 @@ export function cuboxConfigTool(ctx: ToolContext) {
       exportPrompt: { type: 'string', description: 'digest 整理 prompt 模板，{digest} 会被替换为原始标注列表' },
       notionToken: { type: 'string', description: 'Notion Integration Token（exportDest=notion 时用）' },
       notionTargetPageId: { type: 'string', description: 'Notion 目标父页面 URL 或 32 位 ID（exportDest=notion 时用）' },
+      briefFlomoEnabled: { type: 'boolean', description: '是否把「今日收藏简报」也推送到 flomo（每天最多一条；默认 false）' },
+      briefFlomoHour: { type: 'number', description: '简报最早推送时刻（0-23，默认 20）：当天到这个点之后才推，避免推半截简报；0 = 有收藏就推' },
       reset: { type: 'boolean', description: '设为 true 清除全部凭据' },
     },
     output: {
@@ -189,6 +198,8 @@ export function cuboxConfigTool(ctx: ToolContext) {
           usePrompt: { type: 'boolean' },
           notionConfigured: { type: 'boolean' },
           notionTargetPageId: { type: 'string' },
+          briefFlomoEnabled: { type: 'boolean' },
+          briefFlomoHour: { type: 'number' },
           configPath: { type: 'string' },
         },
       },
@@ -199,6 +210,7 @@ export function cuboxConfigTool(ctx: ToolContext) {
       llmBaseUrl?: string; llmApiKey?: string; llmModel?: string; llmPrompt?: string;
       flomoEnabled?: boolean; exportDest?: string; flomoTag?: string; flomoMinAgeMinutes?: number;
       usePrompt?: boolean; exportPrompt?: string; notionToken?: string; notionTargetPageId?: string;
+      briefFlomoEnabled?: boolean; briefFlomoHour?: number;
       reset?: boolean;
     }) {
       if (args !== undefined && args.reset === true) {
@@ -222,6 +234,11 @@ export function cuboxConfigTool(ctx: ToolContext) {
       } else {
         parts.push('标注 digest 未开启（flomoEnabled=true 开启）')
       }
+      if (view.briefFlomoEnabled) {
+        parts.push('每日简报推送已开启（每天一条' + (view.briefFlomoHour > 0 ? '，' + view.briefFlomoHour + ':00 之后推' : '，有收藏即推') + '，标签 #' + view.flomoTag + '）')
+      } else {
+        parts.push('每日简报推送未开启（briefFlomoEnabled=true 开启：没划线的日子也会有日报）')
+      }
       return { ok: true, message: parts.join('；') + '。', ...configToolFields(view) }
     },
   })
@@ -231,7 +248,7 @@ export function cuboxConfigTool(ctx: ToolContext) {
 export function cuboxSyncTool(ctx: ToolContext) {
   return defineTool({
     name: 'cubox_sync',
-    description: '同步 Cubox：拉取最近 N 天（默认今天）的收藏卡片与今日标注，合并进本地缓存（DSH_HOME 下的 dsh-cubox-cache.json，默认 ~/.dsh/dsh-cubox-cache.json），并更新最近同步时间。若配置了 outputDir 导出目录，会按配置导出：exportCards 开启时每张收藏一个 md 文件；配置了 LLM 时按 llmPrompt 生成今日收藏简报（今日收藏简报-YYYY-MM-DD.md）写入该目录。若开启了 flomoEnabled，还会把新增/变更且创建满 N 分钟的标注以每日 digest 推送到 exportDest（flomo/local/notion；本地去重账本防重复）。days 控制拉取窗口天数；limit 控制卡片拉取上限（默认 200）。返回本次拉取、缓存规模与导出结果。',
+    description: '同步 Cubox：拉取最近 N 天（默认今天）的收藏卡片与今日标注，合并进本地缓存（DSH_HOME 下的 dsh-cubox-cache.json，默认 ~/.dsh/dsh-cubox-cache.json），并更新最近同步时间。若配置了 outputDir 导出目录，会按配置导出：exportCards 开启时每张收藏一个 md 文件；配置了 LLM 时按 llmPrompt 生成今日收藏简报（今日收藏简报-YYYY-MM-DD.md）写入该目录。若开启了 flomoEnabled，还会把新增/变更且创建满 N 分钟的标注以每日 digest 推送到 exportDest（flomo/local/notion；本地去重账本防重复）。若开启了 briefFlomoEnabled，当天有收藏时还会把「今日收藏简报」推一条到 flomo（每天一条，briefFlomoHour 控制最早时刻）——没划线的日子也能有日报。days 控制拉取窗口天数；limit 控制卡片拉取上限（默认 200）。返回本次拉取、缓存规模与导出结果。',
     parameters: {
       days: { type: 'number', description: '拉取窗口天数（默认 1 = 今天）' },
       limit: { type: 'number', description: '卡片拉取上限（默认 200）' },
@@ -252,6 +269,8 @@ export function cuboxSyncTool(ctx: ToolContext) {
           digestCandidates: { type: 'number' },
           digestMemos: { type: 'number' },
           digestMessage: { type: 'string' },
+          briefFlomoMemos: { type: 'number' },
+          briefFlomoMessage: { type: 'string' },
           since: { type: 'string' },
         },
       },
@@ -278,6 +297,8 @@ export function cuboxSyncTool(ctx: ToolContext) {
         digestCandidates: result.digestCandidates,
         digestMemos: result.digestMemos,
         digestMessage: result.digestMessage,
+        briefFlomoMemos: result.briefFlomoMemos,
+        briefFlomoMessage: result.briefFlomoMessage,
         since: result.since,
       }
     },

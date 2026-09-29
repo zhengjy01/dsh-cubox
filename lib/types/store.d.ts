@@ -57,13 +57,21 @@ export interface CuboxCredentials {
     notionToken: string;
     /** Notion target parent page id or URL (for exportDest=notion). */
     notionTargetPageId: string;
+    /** Push the daily collection brief to flomo as well (at most one memo per day). */
+    briefFlomoEnabled: boolean;
+    /** Earliest local hour (0-23) at which the daily brief may be pushed; 0 = no gate. */
+    briefFlomoHour: number;
 }
 /** Annotation digest destination. */
 export type ExportDest = 'flomo' | 'local' | 'notion';
 /** Default flomo tag for the Cubox annotation digest. */
 export declare const DEFAULT_FLOMO_TAG = "AI/cubox";
+/** Default earliest hour for the daily brief push (evening, after the day's saves). */
+export declare const DEFAULT_BRIEF_HOUR = 20;
 /** Default digest prompt template ({digest} placeholder). */
 export declare const DEFAULT_EXPORT_PROMPT: string;
+/** Parse a 0-23 hour, falling back to the configured default. */
+export declare function hourOf(value: unknown): number;
 /** Default prompt for the daily collection brief. */
 export declare const DEFAULT_LLM_PROMPT: string;
 /** Public, secret-free status view. */
@@ -87,6 +95,8 @@ export interface CuboxConfigView {
     exportPrompt: string;
     notionConfigured: boolean;
     notionTargetPageId: string;
+    briefFlomoEnabled: boolean;
+    briefFlomoHour: number;
     configPath: string;
 }
 /** Mask a credential for display, keeping only the head and tail. */

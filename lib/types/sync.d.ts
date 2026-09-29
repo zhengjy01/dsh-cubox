@@ -9,6 +9,7 @@
  */
 import type { CuboxApi, CuboxCard, CuboxAnnotation } from './api.ts';
 import type { CuboxStore } from './store.ts';
+import { type CuboxCredentials } from './store.ts';
 import { type LlmConfig } from './llm.ts';
 /** Sync snapshot persisted to the cache file. */
 export interface CuboxCache {
@@ -35,6 +36,10 @@ export interface SyncResult {
     digestMemos: number;
     /** Human-readable digest delivery message ('' = not attempted). */
     digestMessage: string;
+    /** Memos sent for the daily brief push (0 = not attempted/skipped). */
+    briefFlomoMemos: number;
+    /** Human-readable brief-push message, including the skip reason ('' = not attempted). */
+    briefFlomoMessage: string;
 }
 /** Parse the cache file (missing/unreadable → empty). */
 export declare function readCache(): Promise<CuboxCache>;
@@ -69,6 +74,34 @@ export declare function writeDailyBrief(cache: CuboxCache, outputDir: string, ll
 }, opts?: {
     days?: number;
 }): Promise<string>;
+/** Machine-wide per-day ledger for the brief push (JSON map date → content hash, 0600). */
+export declare const DEFAULT_BRIEF_LEDGER_FILE: string;
+/** Ledger location: DSH_CUBOX_BRIEF_LEDGER → DSH_HOME → ~/.dsh. */
+export declare function briefLedgerPath(): string;
+/** Outcome of one daily-brief push attempt. */
+export interface BriefPushResult {
+    ok: boolean;
+    /** True when a gate (time / no cards / already pushed / disabled) skipped the push. */
+    skipped: boolean;
+    memos: number;
+    delivered: number;
+    message: string;
+}
+/**
+ * Push the day's collection brief (the LLM brief already written to outputDir)
+ * to flomo. Separate from the annotation digest: this is the "collected
+ * something today → there is a daily report" path, so days without highlights
+ * still get one.
+ *
+ * At most one push per local day — gates in order: enabled → a brief file
+ * exists → the hour gate (briefFlomoHour, 0 = no gate) → the day actually has
+ * cards → the per-day ledger. A skipped gate is a normal outcome, not an
+ * error, so a 120-minute sync loop stays quiet.
+ */
+export declare function deliverDailyBrief(cache: CuboxCache, config: CuboxCredentials, briefPath: string, opts?: {
+    now?: Date;
+    force?: boolean;
+}): Promise<BriefPushResult>;
 /**
  * Write one markdown file per card into the output directory. Card files
  * mirror the official Cubox Obsidian plugin layout (frontmatter with

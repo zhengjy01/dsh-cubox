@@ -23,6 +23,8 @@ export interface CuboxConfigView {
     exportPrompt: string;
     notionConfigured: boolean;
     notionTargetPageId: string;
+    briefFlomoEnabled: boolean;
+    briefFlomoHour: number;
     configPath: string;
 }
 /** Status view with cache + flomo stats. */
@@ -49,6 +51,8 @@ export interface CuboxSyncResult {
     digestCandidates: number;
     digestMemos: number;
     digestMessage: string;
+    briefFlomoMemos: number;
+    briefFlomoMessage: string;
 }
 /** Digest delivery result. */
 export interface CuboxDigestResult {

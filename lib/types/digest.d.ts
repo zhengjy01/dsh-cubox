@@ -18,7 +18,7 @@ import type { CuboxCredentials, ExportDest } from './store.ts';
 /** Safe per-memo size cap (flomo does not document a hard limit). */
 export declare const FLOMO_MAX_CHARS = 1800;
 /** Default look-back window (days) for eligible annotations. */
-export declare const DEFAULT_DIGEST_WINDOW_DAYS = 2;
+export declare const DEFAULT_DIGEST_WINDOW_DAYS = 7;
 /** Machine-wide dedup ledger (JSON map id → content hash, mode 0600). */
 export declare const DEFAULT_FLOMO_LEDGER_FILE: string;
 /** Ledger location: DSH_CUBOX_FLOMO_LEDGER → DSH_HOME → ~/.dsh. */

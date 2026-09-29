@@ -76,6 +76,10 @@ export interface CuboxCredentials {
   notionToken: string
   /** Notion target parent page id or URL (for exportDest=notion). */
   notionTargetPageId: string
+  /** Push the daily collection brief to flomo as well (at most one memo per day). */
+  briefFlomoEnabled: boolean
+  /** Earliest local hour (0-23) at which the daily brief may be pushed; 0 = no gate. */
+  briefFlomoHour: number
 }
 
 /** Annotation digest destination. */
@@ -84,11 +88,21 @@ export type ExportDest = 'flomo' | 'local' | 'notion'
 /** Default flomo tag for the Cubox annotation digest. */
 export const DEFAULT_FLOMO_TAG = 'AI/cubox'
 
+/** Default earliest hour for the daily brief push (evening, after the day's saves). */
+export const DEFAULT_BRIEF_HOUR = 20
+
 /** Default digest prompt template ({digest} placeholder). */
 export const DEFAULT_EXPORT_PROMPT =
   '你是信息整理助手。请把下面的 Cubox 标注整理成一条简洁的「今日标注回顾」纯文本笔记：\n' +
   '保留每条标注的卡片标题与原文链接，语言精炼，不要使用 # 号，不要添加任何标签。\n\n' +
   '{digest}'
+
+/** Parse a 0-23 hour, falling back to the configured default. */
+export function hourOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 23
+    ? Math.floor(value)
+    : DEFAULT_BRIEF_HOUR
+}
 
 /** Default prompt for the daily collection brief. */
 export const DEFAULT_LLM_PROMPT =
@@ -126,6 +140,8 @@ export interface CuboxConfigView {
   exportPrompt: string
   notionConfigured: boolean
   notionTargetPageId: string
+  briefFlomoEnabled: boolean
+  briefFlomoHour: number
   configPath: string
 }
 
@@ -185,6 +201,8 @@ function empty(): CuboxCredentials {
     exportPrompt: DEFAULT_EXPORT_PROMPT,
     notionToken: '',
     notionTargetPageId: '',
+    briefFlomoEnabled: false,
+    briefFlomoHour: DEFAULT_BRIEF_HOUR,
   }
 }
 
@@ -216,6 +234,8 @@ function parse(raw: unknown): CuboxCredentials {
     exportPrompt: str(record.exportPrompt) || DEFAULT_EXPORT_PROMPT,
     notionToken: str(record.notionToken),
     notionTargetPageId: str(record.notionTargetPageId),
+    briefFlomoEnabled: bool(record.briefFlomoEnabled, false),
+    briefFlomoHour: hourOf(record.briefFlomoHour),
   }
 }
 
@@ -277,6 +297,8 @@ export class CuboxStore {
       exportPrompt: cfg.exportPrompt,
       notionConfigured: cfg.notionToken.trim() !== '',
       notionTargetPageId: cfg.notionTargetPageId,
+      briefFlomoEnabled: cfg.briefFlomoEnabled,
+      briefFlomoHour: cfg.briefFlomoHour,
       configPath: configPath(),
     }
   }
@@ -326,6 +348,10 @@ export class CuboxStore {
     if (args !== undefined && typeof args.exportPrompt === 'string') next.exportPrompt = args.exportPrompt
     if (args !== undefined && typeof args.notionToken === 'string') next.notionToken = args.notionToken.trim()
     if (args !== undefined && typeof args.notionTargetPageId === 'string') next.notionTargetPageId = args.notionTargetPageId.trim()
+    if (args !== undefined && typeof args.briefFlomoEnabled === 'boolean') next.briefFlomoEnabled = args.briefFlomoEnabled
+    if (args !== undefined && typeof args.briefFlomoHour === 'number' && Number.isFinite(args.briefFlomoHour)) {
+      next.briefFlomoHour = Math.min(23, Math.max(0, Math.floor(args.briefFlomoHour)))
+    }
     await this.save(next)
     return this.view()
   }

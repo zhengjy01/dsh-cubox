@@ -172,10 +172,10 @@ export function apply(ctx: Context, config?: Config): void {
 
 /** Re-exports for host consumers and the smoke tests. */
 export { dshHome, pluginPath } from './home.ts'
-export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, DEFAULT_FLOMO_TAG, DEFAULT_EXPORT_PROMPT, type CuboxConfigView, type CuboxCredentials, type ExportDest } from './store.ts'
+export { CuboxStore, mask, parseApiLink, configPath, cachePath, DEFAULT_LLM_PROMPT, DEFAULT_FLOMO_TAG, DEFAULT_EXPORT_PROMPT, DEFAULT_BRIEF_HOUR, hourOf, type CuboxConfigView, type CuboxCredentials, type ExportDest } from './store.ts'
 export { CuboxApi, CuboxApiError, formatApiTime, todayRange, type CuboxCard, type CuboxAnnotation, type CuboxCardDetail, type CuboxFolder, type CuboxTag } from './api.ts'
 export { cuboxStatusTool, cuboxConfigTool, cuboxSyncTool, cuboxCardsTool, cuboxFlomoTool, buildTools, type ToolContext } from './tools.ts'
-export { doSync, readCache, writeCache, exportSyncToMarkdown, formatCollectionForPrompt, writeDailyBrief, type CuboxCache, type SyncResult } from './sync.ts'
+export { doSync, readCache, writeCache, exportSyncToMarkdown, formatCollectionForPrompt, writeDailyBrief, deliverDailyBrief, briefLedgerPath, DEFAULT_BRIEF_LEDGER_FILE, type CuboxCache, type SyncResult, type BriefPushResult } from './sync.ts'
 export {
   deliverAnnotationDigest, buildDigestMemos, buildDigestMarkdown, selectUnpushedAnnotations,
   readFlomoLedger, writeFlomoLedger, annotationHash, parseCuboxTime, ymd,

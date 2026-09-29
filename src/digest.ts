@@ -28,7 +28,7 @@ import { exportToNotion } from './notion.ts'
 export const FLOMO_MAX_CHARS = 1800
 
 /** Default look-back window (days) for eligible annotations. */
-export const DEFAULT_DIGEST_WINDOW_DAYS = 2
+export const DEFAULT_DIGEST_WINDOW_DAYS = 7
 
 /** Machine-wide dedup ledger (JSON map id → content hash, mode 0600). */
 export const DEFAULT_FLOMO_LEDGER_FILE = pluginPath(undefined, '.cubox-flomo-annotations-sent')
@@ -126,8 +126,11 @@ export function selectUnpushedAnnotations(
   for (const a of cache.annotations) {
     const created = parseCuboxTime(a.create_time)
     if (created === 0) continue
-    if (created < windowStart) continue
-    if (created > settledBefore) continue
+    // Window on the latest change, not the creation time: a note added to an
+    // older highlight is a fresh change and must stay eligible.
+    const touched = Math.max(created, parseCuboxTime(a.update_time))
+    if (touched < windowStart) continue
+    if (touched > settledBefore) continue
     if (opts.ledger[a.id] === annotationHash(a)) continue
     out.push(a)
   }
@@ -272,8 +275,9 @@ export function annotationsInWindow(cache: CuboxCache, now: Date, windowDays: nu
   const start = now.getTime() - windowDays * 24 * 60 * 60 * 1000
   return cache.annotations
     .filter((a) => {
-      const t = parseCuboxTime(a.create_time)
-      return t !== 0 && t >= start
+      const created = parseCuboxTime(a.create_time)
+      if (created === 0) return false
+      return Math.max(created, parseCuboxTime(a.update_time)) >= start
     })
     .sort((x, y) => parseCuboxTime(x.create_time) - parseCuboxTime(y.create_time))
 }

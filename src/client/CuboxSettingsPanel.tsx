@@ -110,6 +110,18 @@ function digestStatusText(view: CuboxStatusView | null): string {
   )
 }
 
+/** Status line for the daily-brief push block. */
+function briefStatusText(view: CuboxStatusView | null): string {
+  if (view === null) return '加载中…'
+  return (
+    (view.briefFlomoEnabled ? '已开启' : '未开启') +
+    ' · 每天一条' +
+    (view.briefFlomoHour > 0 ? ' · ' + view.briefFlomoHour + ':00 之后推' : ' · 有收藏即推') +
+    ' · 标签 #' + view.flomoTag +
+    ' · 当天有收藏才推'
+  )
+}
+
 /** The Cubox settings panel component. */
 export function CuboxSettingsPanel(): JSX.Element {
   const [view, setView] = useState<CuboxStatusView | null>(null)
@@ -126,6 +138,8 @@ export function CuboxSettingsPanel(): JSX.Element {
   const [exportDest, setExportDest] = useState('flomo')
   const [flomoTag, setFlomoTag] = useState('AI/cubox')
   const [flomoMinAgeMinutes, setFlomoMinAgeMinutes] = useState('60')
+  const [briefFlomoEnabled, setBriefFlomoEnabled] = useState(false)
+  const [briefFlomoHour, setBriefFlomoHour] = useState('20')
   const [usePrompt, setUsePrompt] = useState(false)
   const [exportPrompt, setExportPrompt] = useState('')
   const [flomoWebhookUrl, setFlomoWebhookUrl] = useState('')
@@ -149,6 +163,8 @@ export function CuboxSettingsPanel(): JSX.Element {
       setExportDest(next.exportDest)
       setFlomoTag(next.flomoTag)
       setFlomoMinAgeMinutes(String(next.flomoMinAgeMinutes))
+      setBriefFlomoEnabled(next.briefFlomoEnabled)
+      setBriefFlomoHour(String(next.briefFlomoHour))
       setUsePrompt(next.usePrompt)
       setExportPrompt(next.exportPrompt)
       setNotionTargetPageId(next.notionTargetPageId)
@@ -176,6 +192,8 @@ export function CuboxSettingsPanel(): JSX.Element {
       exportDest,
       flomoTag: flomoTag.trim(),
       flomoMinAgeMinutes: Number(flomoMinAgeMinutes) || 0,
+      briefFlomoEnabled,
+      briefFlomoHour: Number(briefFlomoHour) || 0,
       usePrompt,
       exportPrompt,
       notionTargetPageId: notionTargetPageId.trim(),
@@ -475,6 +493,27 @@ export function CuboxSettingsPanel(): JSX.Element {
         <button style={s.button} onClick={() => void testNotionConfig()} disabled={busy}>测试 Notion</button>
       </div>
 
+      <h4 style={s.section}>每日收藏简报推送（没划线的日子也有日报）</h4>
+      <div style={s.status}>{briefStatusText(view)}</div>
+      <div style={s.checkRow}>
+        <input
+          type="checkbox"
+          id="cubox-brief-flomo"
+          checked={briefFlomoEnabled}
+          onChange={(e) => setBriefFlomoEnabled(e.target.checked)}
+        />
+        <label htmlFor="cubox-brief-flomo">每天把「今日收藏简报」也推一条到 flomo（当天有收藏才推，一天最多一条）</label>
+      </div>
+      <div style={s.row}>
+        <input
+          style={{ ...s.input, width: '170px' }}
+          placeholder="最早推送时刻 0-23"
+          value={briefFlomoHour}
+          onChange={(e) => setBriefFlomoHour(e.target.value)}
+        />
+        <span style={s.hint}>0 = 有收藏就推；默认 20，即当天 20:00 之后推完整版</span>
+      </div>
+
       <div style={s.row}>
         <button style={s.button} onClick={() => void runSync(1)} disabled={busy}>同步今天</button>
         <button style={s.button} onClick={() => void runSync(7)} disabled={busy}>同步最近 7 天</button>
@@ -487,6 +526,7 @@ export function CuboxSettingsPanel(): JSX.Element {
         「轮询同步间隔(分钟)」控制定时同步（含 flomo 标注推送）的频率，建议 60–120，0 关闭定时；「flomo 标签」在下方「flomo 标注同步」区设置——两者点「保存配置」后即时生效，无需重启。
         配置导出目录后，每次同步会按上方设置写入：勾选卡片时每张收藏一个 md；配置了 AI Key 时按提示词生成「今日收藏简报-日期.md」（{'{collection}'} 替换为今日收藏列表，未包含则自动追加）。
         标注 digest：只推创建满「最短等待」分钟的新增/变更标注，正文自动去 #（flomo 会把 #词 当标签），只保留配置标签，超长自动拆条；flomo 是追加式镜像，Cubox 里改动/删除标注不会回写 flomo。去重账本 ~/.dsh/.cubox-flomo-annotations-sent 记录已推送标注，删除后可能重复推送。
+        每日收藏简报推送：当天有收藏时把「今日收藏简报」也推一条到 flomo（一天最多一条，去重账本 ~/.dsh/.cubox-flomo-brief-sent），默认 20 点之后推以保证是当天完整版。与标注 digest 相互独立——没划线的日子靠它保底，不会断更。
       </div>
     </div>
   )
